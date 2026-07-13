@@ -1,0 +1,10 @@
+node_modules
+.next
+.vercel
+out
+build
+coverage
+*.lock
+package-lock.json
+public
+src/components/ui
