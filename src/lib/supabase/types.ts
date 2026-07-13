@@ -22,6 +22,7 @@ export type Database = {
           type?: string;
           initial_balance?: number | string;
         };
+        Relationships: [];
       };
       categories: {
         Row: {
@@ -44,6 +45,7 @@ export type Database = {
           type?: "income" | "expense";
           parent_id?: string | null;
         };
+        Relationships: [];
       };
       transfers: {
         Row: {
@@ -58,6 +60,7 @@ export type Database = {
         };
         Insert: never;
         Update: never;
+        Relationships: [];
       };
       transactions: {
         Row: {
@@ -87,6 +90,7 @@ export type Database = {
           date?: string;
           description?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
@@ -99,6 +103,7 @@ export type Database = {
           initial_balance: number;
           balance: number;
         };
+        Relationships: [];
       };
       v_category_monthly_summary: {
         Row: {
@@ -110,6 +115,7 @@ export type Database = {
           month: number;
           total: number;
         };
+        Relationships: [];
       };
       v_monthly_totals: {
         Row: {
@@ -120,6 +126,7 @@ export type Database = {
           total_expense: number;
           net: number;
         };
+        Relationships: [];
       };
     };
     Functions: {
