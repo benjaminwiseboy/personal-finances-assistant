@@ -2163,10 +2163,8 @@ export function AccountList({
                 open={editing?.account_id === account.account_id}
                 onOpenChange={(open) => setEditing(open ? account : null)}
               >
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Modifier
-                  </Button>
+                <DialogTrigger render={<Button variant="outline" size="sm" />}>
+                  Modifier
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
@@ -2207,7 +2205,8 @@ Write `pfm-app/src/app/(app)/accounts/page.tsx`:
 ```tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import {
   Dialog,
@@ -2229,30 +2228,31 @@ type AccountRow = {
 };
 
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("v_account_balances")
-      .select("*")
-      .order("name");
-    setAccounts(data ?? []);
-  }, []);
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("v_account_balances")
+        .select("*")
+        .order("name");
+      return (data ?? []) as AccountRow[];
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  function reload() {
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Comptes</h1>
         <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogTrigger asChild>
-            <Button>Nouveau compte</Button>
-          </DialogTrigger>
+          <DialogTrigger render={<Button />}>Nouveau compte</DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nouveau compte</DialogTitle>
@@ -2260,17 +2260,28 @@ export default function AccountsPage() {
             <AccountForm
               onSuccess={() => {
                 setCreating(false);
-                load();
+                reload();
               }}
             />
           </DialogContent>
         </Dialog>
       </div>
-      <AccountList accounts={accounts} onChanged={load} />
+      <AccountList accounts={accounts} onChanged={reload} />
     </div>
   );
 }
 ```
+
+**Note (post-execution amendment):** the earlier `useState`/`useEffect`/`useCallback` fetch-on-mount
+pattern originally drafted here triggers `eslint-plugin-react-hooks`'s `set-state-in-effect` rule
+(calling `setState` synchronously within an effect body). The project's Global Constraints already
+list TanStack Query for exactly this purpose (cache/refetch after Server Actions) but earlier
+drafts of this plan never actually wired it into the read-side data fetching. Confirmed with the
+project owner: adopt `useQuery`/`useQueryClient` for all data-fetching pages (this task and
+Tasks 10-13), replacing the manual `useState`+`useEffect` pattern everywhere it appeared. Also,
+`DialogTrigger asChild` (a Radix convention) does not apply to this project's Base UI-backed
+`base-nova` shadcn style — its `DialogTrigger` uses the `render` prop instead (e.g.
+`<DialogTrigger render={<Button />}>label</DialogTrigger>`), corrected throughout this plan.
 
 - [ ] **Step 7: Manually verify**
 
@@ -2759,7 +2770,8 @@ Write `pfm-app/src/app/(app)/categories/page.tsx`:
 ```tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import {
   Dialog,
@@ -2780,30 +2792,31 @@ type CategoryRow = {
 };
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("categories")
-      .select("id, name, type, parent_id")
-      .order("name");
-    setCategories(data ?? []);
-  }, []);
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("categories")
+        .select("id, name, type, parent_id")
+        .order("name");
+      return (data ?? []) as CategoryRow[];
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  function reload() {
+    queryClient.invalidateQueries({ queryKey: ["categories"] });
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Catégories</h1>
         <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogTrigger asChild>
-            <Button>Nouvelle catégorie</Button>
-          </DialogTrigger>
+          <DialogTrigger render={<Button />}>Nouvelle catégorie</DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nouvelle catégorie</DialogTitle>
@@ -2812,13 +2825,13 @@ export default function CategoriesPage() {
               rootCategories={categories.filter((c) => c.parent_id === null)}
               onSuccess={() => {
                 setCreating(false);
-                load();
+                reload();
               }}
             />
           </DialogContent>
         </Dialog>
       </div>
-      <CategoryTree categories={categories} onChanged={load} />
+      <CategoryTree categories={categories} onChanged={reload} />
     </div>
   );
 }
@@ -3440,7 +3453,8 @@ Write `pfm-app/src/app/(app)/transactions/page.tsx`:
 ```tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import {
   Dialog,
@@ -3468,30 +3482,45 @@ type TransactionRow = {
 };
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<TransactionRow[]>([]);
-  const [accounts, setAccounts] = useState<Option[]>([]);
-  const [categories, setCategories] = useState<Option[]>([]);
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("accounts")
+        .select("id, name")
+        .order("name");
+      return (data ?? []) as Option[];
+    },
+  });
 
-    const [{ data: accountRows }, { data: categoryRows }, { data: txRows }] =
-      await Promise.all([
-        supabase.from("accounts").select("id, name").order("name"),
-        supabase.from("categories").select("id, name").order("name"),
-        supabase
-          .from("transactions")
-          .select(
-            "id, account_id, category_id, transfer_id, amount, date, description, accounts(name), categories(name)",
-          )
-          .order("date", { ascending: false }),
-      ]);
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name");
+      return (data ?? []) as Option[];
+    },
+  });
 
-    setAccounts(accountRows ?? []);
-    setCategories(categoryRows ?? []);
-    setTransactions(
-      (txRows ?? []).map((row) => {
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("transactions")
+        .select(
+          "id, account_id, category_id, transfer_id, amount, date, description, accounts(name), categories(name)",
+        )
+        .order("date", { ascending: false });
+
+      return (data ?? []).map((row) => {
         const r = row as unknown as {
           id: string;
           account_id: string;
@@ -3513,24 +3542,27 @@ export default function TransactionsPage() {
           amount: r.amount,
           date: r.date,
           description: r.description,
-        };
-      }),
-    );
-  }, []);
+        } satisfies TransactionRow;
+      });
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  function reload() {
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Transactions</h1>
         <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogTrigger asChild>
-            <Button disabled={accounts.length === 0 || categories.length === 0}>
-              Nouvelle transaction
-            </Button>
+          <DialogTrigger
+            render={
+              <Button disabled={accounts.length === 0 || categories.length === 0} />
+            }
+          >
+            Nouvelle transaction
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -3541,7 +3573,7 @@ export default function TransactionsPage() {
               categories={categories}
               onSuccess={() => {
                 setCreating(false);
-                load();
+                reload();
               }}
             />
           </DialogContent>
@@ -3551,7 +3583,7 @@ export default function TransactionsPage() {
         transactions={transactions}
         accounts={accounts}
         categories={categories}
-        onChanged={load}
+        onChanged={reload}
       />
     </div>
   );
@@ -3958,7 +3990,8 @@ Write `pfm-app/src/app/(app)/transfers/page.tsx`:
 ```tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import {
   Dialog,
@@ -3983,26 +4016,33 @@ type TransferRow = {
 };
 
 export default function TransfersPage() {
-  const [accounts, setAccounts] = useState<Option[]>([]);
-  const [transfers, setTransfers] = useState<TransferRow[]>([]);
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("accounts")
+        .select("id, name")
+        .order("name");
+      return (data ?? []) as Option[];
+    },
+  });
 
-    const [{ data: accountRows }, { data: transferRows }] = await Promise.all([
-      supabase.from("accounts").select("id, name").order("name"),
-      supabase
+  const { data: transfers = [] } = useQuery({
+    queryKey: ["transfers"],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
         .from("transfers")
         .select(
           "id, amount, date, description, from_account:accounts!transfers_from_account_id_fkey(name), to_account:accounts!transfers_to_account_id_fkey(name)",
         )
-        .order("date", { ascending: false }),
-    ]);
+        .order("date", { ascending: false });
 
-    setAccounts(accountRows ?? []);
-    setTransfers(
-      (transferRows ?? []).map((row) => {
+      return (data ?? []).map((row) => {
         const r = row as unknown as {
           id: string;
           amount: number;
@@ -4018,22 +4058,24 @@ export default function TransfersPage() {
           description: r.description,
           from_account_name: r.from_account?.name ?? "",
           to_account_name: r.to_account?.name ?? "",
-        };
-      }),
-    );
-  }, []);
+        } satisfies TransferRow;
+      });
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  function reload() {
+    queryClient.invalidateQueries({ queryKey: ["transfers"] });
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Transferts</h1>
         <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogTrigger asChild>
-            <Button disabled={accounts.length < 2}>Nouveau transfert</Button>
+          <DialogTrigger render={<Button disabled={accounts.length < 2} />}>
+            Nouveau transfert
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -4043,13 +4085,13 @@ export default function TransfersPage() {
               accounts={accounts}
               onSuccess={() => {
                 setCreating(false);
-                load();
+                reload();
               }}
             />
           </DialogContent>
         </Dialog>
       </div>
-      <TransferList transfers={transfers} onChanged={load} />
+      <TransferList transfers={transfers} onChanged={reload} />
     </div>
   );
 }
@@ -4347,7 +4389,8 @@ Write `pfm-app/src/app/(app)/dashboard/page.tsx`:
 ```tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { MonthNav } from "@/components/dashboard/month-nav";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
@@ -4358,60 +4401,61 @@ export default function DashboardPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [totals, setTotals] = useState({
-    total_income: 0,
-    total_expense: 0,
-    net: 0,
-  });
-  const [categoryData, setCategoryData] = useState<
-    { category_name: string; total: number }[]
-  >([]);
-  const [recent, setRecent] = useState<
-    { id: string; date: string; description: string; amount: number }[]
-  >([]);
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
-
-    const [{ data: totalsRow }, { data: categoryRows }, { data: recentRows }] =
-      await Promise.all([
-        supabase
+  const { data: totals = { total_income: 0, total_expense: 0, net: 0 } } =
+    useQuery({
+      queryKey: ["dashboard-totals", year, month],
+      queryFn: async () => {
+        const supabase = createClient();
+        const { data } = await supabase
           .from("v_monthly_totals")
           .select("total_income, total_expense, net")
           .eq("year", year)
           .eq("month", month)
-          .maybeSingle(),
-        supabase
-          .from("v_category_monthly_summary")
-          .select("category_name, total")
-          .eq("year", year)
-          .eq("month", month)
-          .eq("type", "expense")
-          .order("total", { ascending: false }),
-        supabase
-          .from("transactions")
-          .select("id, date, description, amount")
-          .gte("date", `${year}-${String(month).padStart(2, "0")}-01`)
-          .lt(
-            "date",
-            month === 12
-              ? `${year + 1}-01-01`
-              : `${year}-${String(month + 1).padStart(2, "0")}-01`,
-          )
-          .order("date", { ascending: false })
-          .limit(10),
-      ]);
+          .maybeSingle();
+        return data ?? { total_income: 0, total_expense: 0, net: 0 };
+      },
+    });
 
-    setTotals(
-      totalsRow ?? { total_income: 0, total_expense: 0, net: 0 },
-    );
-    setCategoryData(categoryRows ?? []);
-    setRecent(recentRows ?? []);
-  }, [year, month]);
+  const { data: categoryData = [] } = useQuery({
+    queryKey: ["dashboard-categories", year, month],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("v_category_monthly_summary")
+        .select("category_name, total")
+        .eq("year", year)
+        .eq("month", month)
+        .eq("type", "expense")
+        .order("total", { ascending: false });
+      return (data ?? []) as { category_name: string; total: number }[];
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: recent = [] } = useQuery({
+    queryKey: ["dashboard-recent", year, month],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("transactions")
+        .select("id, date, description, amount")
+        .gte("date", `${year}-${String(month).padStart(2, "0")}-01`)
+        .lt(
+          "date",
+          month === 12
+            ? `${year + 1}-01-01`
+            : `${year}-${String(month + 1).padStart(2, "0")}-01`,
+        )
+        .order("date", { ascending: false })
+        .limit(10);
+      return (data ?? []) as {
+        id: string;
+        date: string;
+        description: string;
+        amount: number;
+      }[];
+    },
+  });
 
   return (
     <div className="flex flex-col gap-6">
