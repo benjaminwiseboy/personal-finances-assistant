@@ -12,11 +12,13 @@ async function signedAmount(
   supabase: Awaited<ReturnType<typeof createClient>>,
   categoryId: string,
   amount: string,
+  userId: string,
 ): Promise<{ amount?: string; error?: string }> {
   const { data: category, error } = await supabase
     .from("categories")
     .select("type")
     .eq("id", categoryId)
+    .eq("user_id", userId)
     .single();
 
   if (error || !category) return { error: "Catégorie introuvable" };
@@ -41,10 +43,19 @@ export async function createTransaction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("id", parsed.data.account_id)
+    .eq("user_id", user.id)
+    .single();
+  if (!account) return { error: "Compte introuvable" };
+
   const signed = await signedAmount(
     supabase,
     parsed.data.category_id,
     parsed.data.amount,
+    user.id,
   );
   if (signed.error || !signed.amount) {
     return { error: signed.error ?? "Échec du calcul du montant" };
@@ -97,10 +108,19 @@ export async function updateTransaction(
     };
   }
 
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("id", parsed.data.account_id)
+    .eq("user_id", user.id)
+    .single();
+  if (!account) return { error: "Compte introuvable" };
+
   const signed = await signedAmount(
     supabase,
     parsed.data.category_id,
     parsed.data.amount,
+    user.id,
   );
   if (signed.error || !signed.amount) {
     return { error: signed.error ?? "Échec du calcul du montant" };

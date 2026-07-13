@@ -17,7 +17,11 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-import { deleteCategory } from "@/actions/categories";
+import {
+  createCategory,
+  deleteCategory,
+  updateCategory,
+} from "@/actions/categories";
 
 describe("deleteCategory", () => {
   beforeEach(() => {
@@ -69,5 +73,139 @@ describe("deleteCategory", () => {
 
     const result = await deleteCategory("cat-1");
     expect(result.error).toMatch(/sous-catégories/i);
+  });
+});
+
+describe("createCategory", () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+  });
+
+  it("refuses to create a category with a parent belonging to another user", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await createCategory({
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toMatch(/parente/i);
+  });
+
+  it("creates a category when the parent belongs to the user", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () =>
+                  Promise.resolve({ data: { id: "parent-1" }, error: null }),
+              }),
+            }),
+          }),
+          insert: () => Promise.resolve({ error: null }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await createCategory({
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toBeUndefined();
+  });
+
+  it("creates a top-level category without checking a parent", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          insert: () => Promise.resolve({ error: null }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await createCategory({
+      name: "Top",
+      type: "income",
+      parent_id: null,
+    });
+    expect(result.error).toBeUndefined();
+  });
+});
+
+describe("updateCategory", () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+  });
+
+  it("refuses to update a category with a parent belonging to another user", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await updateCategory("cat-1", {
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toMatch(/parente/i);
+  });
+
+  it("updates a category when the parent belongs to the user", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () =>
+                  Promise.resolve({ data: { id: "parent-1" }, error: null }),
+              }),
+            }),
+          }),
+          update: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({ error: null }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await updateCategory("cat-1", {
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toBeUndefined();
   });
 });

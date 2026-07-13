@@ -21,6 +21,16 @@ export async function createCategory(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
+  if (parsed.data.parent_id) {
+    const { data: parent } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("id", parsed.data.parent_id)
+      .eq("user_id", user.id)
+      .single();
+    if (!parent) return { error: "Catégorie parente introuvable" };
+  }
+
   const { error } = await supabase.from("categories").insert({
     user_id: user.id,
     name: parsed.data.name,
@@ -48,6 +58,16 @@ export async function updateCategory(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
+
+  if (parsed.data.parent_id) {
+    const { data: parent } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("id", parsed.data.parent_id)
+      .eq("user_id", user.id)
+      .single();
+    if (!parent) return { error: "Catégorie parente introuvable" };
+  }
 
   const { error } = await supabase
     .from("categories")
