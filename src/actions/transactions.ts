@@ -77,11 +77,16 @@ export async function updateTransaction(
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
 
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
     .select("transfer_id")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (fetchError || !existing) return { error: "Transaction introuvable" };
@@ -110,7 +115,8 @@ export async function updateTransaction(
       date: parsed.data.date,
       description: parsed.data.description,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   if (error) return { error: "Échec de la mise à jour de la transaction" };
 
@@ -124,11 +130,16 @@ export async function deleteTransaction(
   id: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
 
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
     .select("transfer_id")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (fetchError || !existing) return { error: "Transaction introuvable" };
@@ -139,7 +150,11 @@ export async function deleteTransaction(
     };
   }
 
-  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  const { error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) return { error: "Échec de la suppression de la transaction" };
 
   revalidatePath("/transactions");

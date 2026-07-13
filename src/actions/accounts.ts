@@ -45,6 +45,11 @@ export async function updateAccount(
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
   const { error } = await supabase
     .from("accounts")
     .update({
@@ -52,7 +57,8 @@ export async function updateAccount(
       type: parsed.data.type,
       initial_balance: parsed.data.initial_balance,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   if (error) return { error: "Échec de la mise à jour du compte" };
 
@@ -65,6 +71,10 @@ export async function deleteAccount(
   id: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
 
   const { data: linked, error: linkedError } = await supabase
     .from("transactions")
@@ -80,7 +90,11 @@ export async function deleteAccount(
     };
   }
 
-  const { error } = await supabase.from("accounts").delete().eq("id", id);
+  const { error } = await supabase
+    .from("accounts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) return { error: "Échec de la suppression du compte" };
 
   revalidatePath("/accounts");

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mockFrom = vi.fn();
+const mockGetUser = vi.fn(async () => ({
+  data: { user: { id: "test-user-id" } },
+}));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({ from: mockFrom })),
+  createClient: vi.fn(async () => ({
+    from: mockFrom,
+    auth: { getUser: mockGetUser },
+  })),
 }));
 // revalidatePath requires a Next.js request context (static generation
 // store); outside of one (e.g. a plain Vitest unit test) it throws. Mock it

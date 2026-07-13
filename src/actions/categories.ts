@@ -44,6 +44,11 @@ export async function updateCategory(
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
   const { error } = await supabase
     .from("categories")
     .update({
@@ -51,7 +56,8 @@ export async function updateCategory(
       type: parsed.data.type,
       parent_id: parsed.data.parent_id,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", user.id);
 
   if (error) return { error: "Échec de la mise à jour de la catégorie" };
 
@@ -63,6 +69,10 @@ export async function deleteCategory(
   id: string,
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
 
   const { data: linkedTx, error: txError } = await supabase
     .from("transactions")
@@ -92,7 +102,11 @@ export async function deleteCategory(
     };
   }
 
-  const { error } = await supabase.from("categories").delete().eq("id", id);
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) return { error: "Échec de la suppression de la catégorie" };
 
   revalidatePath("/categories");
