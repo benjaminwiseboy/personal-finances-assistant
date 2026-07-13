@@ -420,11 +420,21 @@ cd pfm-app && git add -A && git commit -m "chore: scaffold Next.js project with 
 **Files:**
 - Create: `pfm-app/components.json`
 - Create: `pfm-app/src/components/ui/*` (generated)
+- Create: `pfm-app/next.config.js` (minimal empty config — required by the shadcn CLI's
+  framework detection; see Step 1 note. Task 14 converts this to `next.config.ts` when adding
+  Serwist, rather than creating a config file from scratch.)
 
 **Interfaces:**
 - Produces: shadcn/ui primitives (`Button`, `Input`, `Select`, `Dialog`, `Card`, `Table`,
-  `Form`, `Label`, `Textarea`) importable from `@/components/ui/*`, used by every UI task from
-  Task 8 onward.
+  `Label`, `Textarea`) importable from `@/components/ui/*`, used by every UI task from Task 8
+  onward.
+- **Note (post-execution amendment):** the shadcn `form` primitive was dropped from this task's
+  scope. The registry endpoint for `form` under the `base-nova` style returned an incomplete
+  schema and the CLI hung indefinitely on `add form` (verified across two CLI versions). No
+  task in this plan actually imports shadcn's `Form`/`FormField` wrappers — every form task
+  (8–12) uses plain `react-hook-form` (`register`/`watch`/`setValue`) with the `Label`/`Input`/
+  `Select` primitives directly, so this was dead scope. Confirmed with the project owner before
+  dropping it.
 
 - [ ] **Step 1: Initialize shadcn/ui**
 
@@ -441,12 +451,23 @@ override, RSC yes, CSS `src/app/globals.css`, alias `@/components`, `@/lib/utils
 Expected: `pfm-app/components.json` is created, `src/lib/utils.ts` is created with a `cn()`
 helper, `src/app/globals.css` gains shadcn's CSS variables.
 
+Note: the shadcn CLI's framework detection may require a `next.config.js` or `next.config.ts`
+to recognize the project as Next.js (Task 1 deliberately ships without one). If `init` or `add`
+fails to detect the framework, create a minimal `pfm-app/next.config.js`:
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+module.exports = nextConfig;
+```
+
 - [ ] **Step 2: Add the primitives this phase needs**
 
 Run:
 
 ```bash
-cd pfm-app && npx shadcn@latest add button input select dialog card table form label textarea
+cd pfm-app && npx shadcn@latest add button input select dialog card table label textarea
 ```
 
 Expected: files appear under `pfm-app/src/components/ui/` for each component, no errors.
@@ -4447,7 +4468,9 @@ whole Phase 1 feature set.
 - Create: `pfm-app/public/icons/icon.svg`
 - Create: `pfm-app/public/icons/icon-maskable.svg`
 - Create: `pfm-app/src/sw.ts`
-- Create: `pfm-app/next.config.ts`
+- Replace: `pfm-app/next.config.js` with `pfm-app/next.config.ts` (Task 2 created a minimal
+  empty `next.config.js` so the shadcn CLI could detect the Next.js framework — delete that
+  file and create the Serwist-wrapped `.ts` version below in its place)
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks (purely additive shell around the existing app).
@@ -4537,7 +4560,8 @@ serwist.addEventListeners();
 
 - [ ] **Step 4: Wire Serwist into the Next.js config**
 
-Write `pfm-app/next.config.ts`:
+Delete `pfm-app/next.config.js` (the empty placeholder from Task 2) and write
+`pfm-app/next.config.ts` in its place:
 
 ```ts
 import withSerwistInit from "@serwist/next";
