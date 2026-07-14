@@ -5,6 +5,10 @@
 /.next/
 /out/
 
+# serwist (PWA service worker, generated at build time)
+/public/sw.js
+/public/swe-worker-*.js
+
 # production
 /build
 

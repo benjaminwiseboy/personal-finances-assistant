@@ -97,6 +97,9 @@ export default function TransactionsPage() {
   function reload() {
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-totals"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-categories"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-recent"] });
   }
 
   return (

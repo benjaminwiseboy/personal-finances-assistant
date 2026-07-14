@@ -113,7 +113,10 @@ describe("createCategory", () => {
             eq: () => ({
               eq: () => ({
                 single: () =>
-                  Promise.resolve({ data: { id: "parent-1" }, error: null }),
+                  Promise.resolve({
+                    data: { id: "parent-1", parent_id: null },
+                    error: null,
+                  }),
               }),
             }),
           }),
@@ -129,6 +132,34 @@ describe("createCategory", () => {
       parent_id: "parent-1",
     });
     expect(result.error).toBeUndefined();
+  });
+
+  it("refuses to create a category with a parent that is itself a sub-category", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () =>
+                  Promise.resolve({
+                    data: { id: "parent-1", parent_id: "grandparent-1" },
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await createCategory({
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toMatch(/racine/i);
   });
 
   it("creates a top-level category without checking a parent", async () => {
@@ -184,12 +215,27 @@ describe("updateCategory", () => {
       if (table === "categories") {
         return {
           select: () => ({
-            eq: () => ({
-              eq: () => ({
-                single: () =>
-                  Promise.resolve({ data: { id: "parent-1" }, error: null }),
-              }),
-            }),
+            eq: (column: string) => {
+              if (column === "id") {
+                // parent lookup: .eq("id", parentId).eq("user_id", userId).single()
+                return {
+                  eq: () => ({
+                    single: () =>
+                      Promise.resolve({
+                        data: { id: "parent-1", parent_id: null },
+                        error: null,
+                      }),
+                  }),
+                };
+              }
+              if (column === "parent_id") {
+                // has-children lookup: .eq("parent_id", id).limit(1)
+                return {
+                  limit: () => Promise.resolve({ data: [], error: null }),
+                };
+              }
+              throw new Error(`unexpected eq column: ${column}`);
+            },
           }),
           update: () => ({
             eq: () => ({
@@ -207,5 +253,85 @@ describe("updateCategory", () => {
       parent_id: "parent-1",
     });
     expect(result.error).toBeUndefined();
+  });
+
+  it("refuses to update a category with a parent that is itself a sub-category", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () =>
+                  Promise.resolve({
+                    data: { id: "parent-1", parent_id: "grandparent-1" },
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await updateCategory("cat-1", {
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toMatch(/racine/i);
+  });
+
+  it("refuses to set a category as its own parent", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await updateCategory("cat-1", {
+      name: "Sub",
+      type: "expense",
+      parent_id: "cat-1",
+    });
+    expect(result.error).toMatch(/propre catégorie parente/i);
+  });
+
+  it("refuses to re-parent a category that already has children", async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "categories") {
+        return {
+          select: () => ({
+            eq: (column: string) => {
+              if (column === "id") {
+                return {
+                  eq: () => ({
+                    single: () =>
+                      Promise.resolve({
+                        data: { id: "parent-1", parent_id: null },
+                        error: null,
+                      }),
+                  }),
+                };
+              }
+              if (column === "parent_id") {
+                return {
+                  limit: () =>
+                    Promise.resolve({ data: [{ id: "child-1" }], error: null }),
+                };
+              }
+              throw new Error(`unexpected eq column: ${column}`);
+            },
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const result = await updateCategory("cat-1", {
+      name: "Sub",
+      type: "expense",
+      parent_id: "parent-1",
+    });
+    expect(result.error).toMatch(/sous-catégories/i);
   });
 });

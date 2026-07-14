@@ -24,11 +24,14 @@ export async function createCategory(
   if (parsed.data.parent_id) {
     const { data: parent } = await supabase
       .from("categories")
-      .select("id")
+      .select("id, parent_id")
       .eq("id", parsed.data.parent_id)
       .eq("user_id", user.id)
       .single();
     if (!parent) return { error: "Catégorie parente introuvable" };
+    if (parent.parent_id) {
+      return { error: "La catégorie parente doit être une catégorie racine" };
+    }
   }
 
   const { error } = await supabase.from("categories").insert({
@@ -59,14 +62,35 @@ export async function updateCategory(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Non authentifié" };
 
+  if (parsed.data.parent_id === id) {
+    return {
+      error: "Une catégorie ne peut pas être sa propre catégorie parente",
+    };
+  }
+
   if (parsed.data.parent_id) {
     const { data: parent } = await supabase
       .from("categories")
-      .select("id")
+      .select("id, parent_id")
       .eq("id", parsed.data.parent_id)
       .eq("user_id", user.id)
       .single();
     if (!parent) return { error: "Catégorie parente introuvable" };
+    if (parent.parent_id) {
+      return { error: "La catégorie parente doit être une catégorie racine" };
+    }
+
+    const { data: children } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("parent_id", id)
+      .limit(1);
+    if (children && children.length > 0) {
+      return {
+        error:
+          "Impossible de déplacer cette catégorie : elle a des sous-catégories",
+      };
+    }
   }
 
   const { error } = await supabase
