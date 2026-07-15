@@ -67,7 +67,7 @@ export function AccountForm({ account, onSuccess }: AccountFormProps) {
         <Label htmlFor="name">Nom</Label>
         <Input id="name" {...register("name")} />
         {errors.name && (
-          <p className="text-sm text-red-600">{errors.name.message}</p>
+          <p className="text-sm text-destructive">{errors.name.message}</p>
         )}
       </div>
       <div className="flex flex-col gap-2">
@@ -94,7 +94,7 @@ export function AccountForm({ account, onSuccess }: AccountFormProps) {
         <Label htmlFor="initial_balance">Solde initial</Label>
         <Input id="initial_balance" {...register("initial_balance")} />
         {errors.initial_balance && (
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-destructive">
             {errors.initial_balance.message}
           </p>
         )}

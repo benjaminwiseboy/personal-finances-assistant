@@ -11,10 +11,16 @@ export default function LoginPage() {
   const [state, formAction, pending] = useActionState(loginAction, null);
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Mes Finances</CardTitle>
+        <CardHeader className="items-center text-center">
+          <span
+            aria-hidden
+            className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary text-xl font-bold text-primary-foreground"
+          >
+            €
+          </span>
+          <CardTitle className="text-xl">Mes Finances</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={formAction} className="flex flex-col gap-4">
@@ -27,7 +33,7 @@ export default function LoginPage() {
               <Input id="password" name="password" type="password" required />
             </div>
             {state?.error && (
-              <p className="text-sm text-red-600" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {state.error}
               </p>
             )}

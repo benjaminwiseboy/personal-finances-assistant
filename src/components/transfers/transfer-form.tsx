@@ -99,7 +99,7 @@ export function TransferForm({
           </SelectContent>
         </Select>
         {errors.to_account_id && (
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-destructive">
             {errors.to_account_id.message}
           </p>
         )}
@@ -108,7 +108,7 @@ export function TransferForm({
         <Label htmlFor="amount">Montant</Label>
         <Input id="amount" {...register("amount")} />
         {errors.amount && (
-          <p className="text-sm text-red-600">{errors.amount.message}</p>
+          <p className="text-sm text-destructive">{errors.amount.message}</p>
         )}
       </div>
       <div className="flex flex-col gap-2">

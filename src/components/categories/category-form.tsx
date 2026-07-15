@@ -81,7 +81,7 @@ export function CategoryForm({
         <Label htmlFor="name">Nom</Label>
         <Input id="name" {...register("name")} />
         {errors.name && (
-          <p className="text-sm text-red-600">{errors.name.message}</p>
+          <p className="text-sm text-destructive">{errors.name.message}</p>
         )}
       </div>
       <div className="flex flex-col gap-2">
