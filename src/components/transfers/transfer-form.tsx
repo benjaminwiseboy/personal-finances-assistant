@@ -66,6 +66,7 @@ export function TransferForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="from_account_id">Compte source</Label>
         <Select
+          items={Object.fromEntries(accounts.map((a) => [a.id, a.name]))}
           value={watch("from_account_id")}
           onValueChange={(v) => setValue("from_account_id", v as string)}
         >
@@ -84,6 +85,7 @@ export function TransferForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="to_account_id">Compte destination</Label>
         <Select
+          items={Object.fromEntries(accounts.map((a) => [a.id, a.name]))}
           value={watch("to_account_id")}
           onValueChange={(v) => setValue("to_account_id", v as string)}
         >

@@ -73,6 +73,7 @@ export function AccountForm({ account, onSuccess }: AccountFormProps) {
       <div className="flex flex-col gap-2">
         <Label htmlFor="type">Type</Label>
         <Select
+          items={ACCOUNT_TYPE_LABELS}
           value={watch("type")}
           onValueChange={(v) =>
             setValue("type", v as AccountFormInput["type"])

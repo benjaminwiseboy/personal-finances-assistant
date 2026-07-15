@@ -92,6 +92,7 @@ export function TransactionForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="account_id">Compte</Label>
         <Select
+          items={Object.fromEntries(accounts.map((a) => [a.id, a.name]))}
           value={watch("account_id")}
           onValueChange={(v) => setValue("account_id", v as string)}
         >
@@ -110,6 +111,7 @@ export function TransactionForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="category_id">Catégorie</Label>
         <Select
+          items={Object.fromEntries(categories.map((c) => [c.id, c.name]))}
           value={watch("category_id")}
           onValueChange={(v) => setValue("category_id", v as string)}
         >

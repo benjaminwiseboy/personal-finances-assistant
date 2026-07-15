@@ -87,6 +87,7 @@ export function CategoryForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="type">Type</Label>
         <Select
+          items={CATEGORY_TYPE_LABELS}
           value={selectedType}
           onValueChange={(v) =>
             setValue("type", v as CategoryFormInput["type"])
@@ -107,6 +108,10 @@ export function CategoryForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="parent_id">Catégorie parente (optionnel)</Label>
         <Select
+          items={{
+            none: "Aucune (catégorie racine)",
+            ...Object.fromEntries(eligibleParents.map((c) => [c.id, c.name])),
+          }}
           value={selectedParent || "none"}
           onValueChange={(v) => setValue("parent_id", v === "none" ? "" : v)}
         >
