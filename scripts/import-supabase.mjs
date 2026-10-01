@@ -3,7 +3,10 @@
 // user id), and the bcrypt password hash is copied, so existing logins keep
 // working with the same password.
 //
-// Usage:
+// Usage, from a dashboard backup (plain-SQL pg_dumpall file):
+//   npm run db:import-supabase -- --from-dump ./db_cluster-….backup
+//
+// or from the live database:
 //   SUPABASE_DB_URL="postgresql://postgres:…@db.xxx.supabase.co:5432/postgres" \
 //   SUPABASE_CA_CERT=./prod-ca-2021.crt \
 //     npm run db:import-supabase
@@ -16,23 +19,66 @@ import pg from "pg";
 
 config({ path: ".env.local", quiet: true });
 
+const dumpFlag = process.argv.indexOf("--from-dump");
+const dumpPath = dumpFlag > -1 ? process.argv[dumpFlag + 1] : null;
 const sourceUrl = process.env.SUPABASE_DB_URL;
 const targetUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
-if (!sourceUrl || !targetUrl) {
-  console.error("SUPABASE_DB_URL et DATABASE_URL sont requis.");
+if ((!dumpPath && !sourceUrl) || !targetUrl) {
+  console.error(
+    "DATABASE_URL est requis, ainsi que --from-dump <fichier> ou SUPABASE_DB_URL.",
+  );
   process.exit(1);
+}
+
+const TABLES = [
+  "auth.users",
+  "public.accounts",
+  "public.categories",
+  "public.transfers",
+  "public.transactions",
+  "public.budgets",
+];
+
+/**
+ * Loads only the COPY blocks we need from a plain-SQL dump into an in-memory
+ * Postgres (PGlite). Columns are created as text: the target casts them back.
+ */
+async function openDump(file) {
+  const { PGlite } = await import("@electric-sql/pglite");
+  const db = new PGlite();
+  const lines = readFileSync(file, "utf8").split(/\r?\n/);
+  await db.exec("create schema auth");
+  for (const table of TABLES) {
+    const start = lines.findIndex((l) => l.startsWith(`COPY ${table} (`));
+    if (start < 0) {
+      console.warn(`  (${table} absent du dump)`);
+      continue;
+    }
+    const columns = lines[start].match(/\(([^)]*)\)/)[1].split(", ");
+    const end = lines.indexOf("\\.", start);
+    const data = lines.slice(start + 1, end).join("\n") + "\n";
+    await db.exec(
+      `create table ${table} (${columns.map((c) => `${c} text`).join(", ")})`,
+    );
+    await db.query(`copy ${table} from '/dev/blob'`, [], {
+      blob: new Blob([data]),
+    });
+  }
+  return { query: (sql) => db.query(sql), end: () => db.close() };
 }
 
 // Supabase signs its Postgres certificate with its own CA: download it from
 // Project Settings → Database → SSL and point SUPABASE_CA_CERT at the file.
-const source = new pg.Client({
-  connectionString: sourceUrl,
-  ...(process.env.SUPABASE_CA_CERT && {
-    ssl: { ca: readFileSync(process.env.SUPABASE_CA_CERT, "utf8") },
-  }),
-});
+const source = dumpPath
+  ? await openDump(dumpPath)
+  : new pg.Client({
+      connectionString: sourceUrl,
+      ...(process.env.SUPABASE_CA_CERT && {
+        ssl: { ca: readFileSync(process.env.SUPABASE_CA_CERT, "utf8") },
+      }),
+    });
 const target = new pg.Client({ connectionString: targetUrl });
-await source.connect();
+if (!dumpPath) await source.connect();
 await target.connect();
 
 /** Copies rows as-is, skipping ids that already exist in the target. */

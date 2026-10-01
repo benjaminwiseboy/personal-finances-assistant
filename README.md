@@ -29,6 +29,10 @@ L'inscription publique est désactivée : les comptes se créent avec `npm run u
 ## Reprendre les données de Supabase
 
 ```bash
+# depuis un backup du dashboard (dump SQL texte)
+npm run db:import-supabase -- --from-dump ./db_cluster-XX-XX-XXXX.backup
+
+# ou depuis la base en ligne
 SUPABASE_DB_URL="postgresql://postgres:<mdp>@db.<ref>.supabase.co:5432/postgres" \
 SUPABASE_CA_CERT=./prod-ca-2021.crt \
   npm run db:import-supabase
