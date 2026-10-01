@@ -39,16 +39,24 @@ async function resolveTransaction(
   return { amount: signed.toString() };
 }
 
-/** Transfer legs are only editable through the transfer itself. */
+/**
+ * Transfer legs are only editable through the transfer itself, and holding
+ * movements from the Placements page.
+ */
 async function checkEditable(
   id: string,
   userId: string,
   verb: "modifiez" | "supprimez",
 ): Promise<{ error?: string }> {
   const [existing] = await sql`
-    select transfer_id from transactions
+    select transfer_id, holding_id from transactions
     where id = ${id} and user_id = ${userId}`;
   if (!existing) return { error: "Transaction introuvable" };
+  if (existing.holding_id) {
+    return {
+      error: `Ce mouvement est lié à un placement ou une dette : ${verb}-le depuis Placements`,
+    };
+  }
   if (existing.transfer_id) {
     return {
       error: `Cette transaction fait partie d'un transfert : ${verb} le transfert directement`,
@@ -115,7 +123,8 @@ export async function updateTransaction(
           amount = ${resolved.amount},
           date = ${parsed.data.date},
           description = ${parsed.data.description}
-      where id = ${id} and user_id = ${userId} and transfer_id is null`;
+      where id = ${id} and user_id = ${userId}
+        and transfer_id is null and holding_id is null`;
   } catch {
     return { error: "Échec de la mise à jour de la transaction" };
   }
@@ -136,7 +145,8 @@ export async function deleteTransaction(
 
     await sql`
       delete from transactions
-      where id = ${id} and user_id = ${userId} and transfer_id is null`;
+      where id = ${id} and user_id = ${userId}
+        and transfer_id is null and holding_id is null`;
   } catch {
     return { error: "Échec de la suppression de la transaction" };
   }

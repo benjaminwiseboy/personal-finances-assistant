@@ -9,6 +9,7 @@ import { BalanceHero } from "@/components/dashboard/balance-hero";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
 import { BudgetWatch } from "@/components/dashboard/budget-watch";
+import { UpcomingDue } from "@/components/dashboard/upcoming-due";
 import type { BudgetView } from "@/components/budgets/budget-list";
 
 export default function DashboardPage() {
@@ -112,6 +113,7 @@ export default function DashboardPage() {
         totalExpense={totals.total_expense}
         net={totals.net}
       />
+      <UpcomingDue />
       <BudgetWatch
         atRisk={atRiskBudgets}
         hasBudgets={budgets.length > 0}

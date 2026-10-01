@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRight, HandCoins, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
 import { deleteTransaction } from "@/actions/transactions";
 import { deleteTransfer } from "@/actions/transfers";
+import { deleteHoldingMovement } from "@/actions/holdings";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -30,6 +31,8 @@ type TransactionRow = {
   category_id: string | null;
   category_name: string | null;
   transfer_id: string | null;
+  holding_id: string | null;
+  holding_name: string | null;
   amount: number;
   date: string;
   description: string;
@@ -62,6 +65,17 @@ export function TransactionList({
   const [editing, setEditing] = useState<TransactionRow | null>(null);
 
   async function handleDelete(row: TransactionRow) {
+    if (row.holding_id) {
+      if (!confirm(`Supprimer ce mouvement lié à « ${row.holding_name} » ?`)) return;
+      const result = await deleteHoldingMovement(row.id);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Mouvement supprimé");
+      onChanged();
+      return;
+    }
     const isTransfer = !!row.transfer_id;
     if (
       !confirm(
@@ -123,7 +137,12 @@ export function TransactionList({
                 {tx.account_name}
               </TableCell>
               <TableCell>
-                {tx.transfer_id ? (
+                {tx.holding_id ? (
+                  <span className="inline-flex max-w-44 items-center gap-1.5 rounded-full bg-mint/10 px-2 py-0.5 text-xs font-medium text-mint ring-1 ring-mint/20">
+                    <HandCoins className="size-3 shrink-0" />
+                    <span className="truncate">{tx.holding_name}</span>
+                  </span>
+                ) : tx.transfer_id ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-amber/10 px-2 py-0.5 text-xs font-medium text-amber ring-1 ring-amber/20">
                     <ArrowRight className="size-3" />
                     Transfert
@@ -146,7 +165,7 @@ export function TransactionList({
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Modifier"
-                    disabled={!!tx.transfer_id}
+                    disabled={!!tx.transfer_id || !!tx.holding_id}
                     onClick={() => setEditing(tx)}
                   >
                     <Pencil />

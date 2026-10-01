@@ -40,6 +40,12 @@ SUPABASE_CA_CERT=./prod-ca-2021.crt \
 
 Copie les utilisateurs (même id, même mot de passe : les hash bcrypt de Supabase sont acceptés à la connexion) puis comptes, catégories, transferts, transactions et budgets. Le certificat se télécharge dans Supabase → Project Settings → Database → SSL. Relançable sans doublons.
 
+## Placements & dettes
+
+Onglet `/placements` : investissements, prêts accordés et dettes, en € ou en FCFA (équivalent € à la parité fixe 655,957). Chaque mouvement sur un compte bancaire (versement, remboursement, revenu) est une transaction liée (`transactions.holding_id`) : il fait bouger le solde du compte mais n'entre ni dans les dépenses ni dans les entrées du mois.
+
+**Rappels d'échéance** : carte « Échéances à venir » sur le tableau de bord, badge sur l'onglet et sur l'icône de l'app installée, et notifications push à J-30, J-7, J-1, J0 puis une fois en retard. Le push est envoyé par un cron Vercel quotidien (`vercel.json` → `/api/cron/reminders`, 7h UTC) et demande les variables `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` et `CRON_SECRET`. Sur iPhone, les notifications ne fonctionnent qu'avec l'app ajoutée à l'écran d'accueil.
+
 ## PWA
 
 Manifest dans `src/app/manifest.ts`, service worker Serwist (`src/sw.ts`, actif en production uniquement). Les dernières données consultées restent lisibles hors ligne, et une page `/~offline` s'affiche pour les pages jamais ouvertes. Le cache des données est vidé à l'affichage de l'écran de connexion.

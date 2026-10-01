@@ -29,6 +29,8 @@ type TransactionRow = {
   category_id: string | null;
   category_name: string | null;
   transfer_id: string | null;
+  holding_id: string | null;
+  holding_name: string | null;
   amount: number;
   date: string;
   description: string;
@@ -108,6 +110,7 @@ export default function TransactionsPage() {
     queryClient.invalidateQueries({ queryKey: ["dashboard-recent"] });
     queryClient.invalidateQueries({ queryKey: ["budget-spending"] });
     queryClient.invalidateQueries({ queryKey: ["category-analysis"] });
+    queryClient.invalidateQueries({ queryKey: ["holdings"] });
   }
 
   const accountFilterItems = {

@@ -1,5 +1,12 @@
 import "server-only";
 import { sql } from "@/lib/db";
+import type {
+  Currency,
+  DuePrecision,
+  HoldingKind,
+  HoldingStatus,
+  ReturnPeriod,
+} from "@/domain/holdings";
 
 // Every read the client pages need, scoped to the signed-in user. Served by
 // /api/data/[query] and called from the browser through `fetchData()`.
@@ -30,6 +37,22 @@ function monthRange(p: Params) {
 }
 
 export class BadRequest extends Error {}
+
+export type HoldingRow = {
+  id: string;
+  kind: HoldingKind;
+  name: string;
+  description: string | null;
+  currency: Currency;
+  amount: number;
+  expected_return_pct: number | null;
+  return_period: ReturnPeriod;
+  due_date: string | null;
+  due_precision: DuePrecision;
+  status: HoldingStatus;
+  account_flow: number;
+  movement_count: number;
+};
 
 export const queries = {
   accountBalances: async (userId: string) =>
@@ -160,10 +183,12 @@ export const queries = {
     return (await sql`
       select t.id, t.account_id, coalesce(a.name, '') as account_name,
              t.category_id, c.name as category_name, t.transfer_id,
+             t.holding_id, h.name as holding_name,
              t.amount::float8 as amount, t.date::text as date, t.description
       from transactions t
       left join accounts a on a.id = t.account_id
       left join categories c on c.id = t.category_id
+      left join holdings h on h.id = t.holding_id
       where t.user_id = ${userId}
         and t.date >= ${start} and t.date < ${end}
         and (${account}::uuid is null or t.account_id = ${account}::uuid)
@@ -174,11 +199,65 @@ export const queries = {
       category_id: string | null;
       category_name: string | null;
       transfer_id: string | null;
+      holding_id: string | null;
+      holding_name: string | null;
       amount: number;
       date: string;
       description: string;
     }[];
   },
+
+  /**
+   * Every holding, with the net euros that moved on bank accounts for it
+   * (negative = money that left the accounts).
+   */
+  holdings: async (userId: string) =>
+    (await sql`
+      select h.id, h.kind, h.name, h.description, h.currency,
+             h.amount::float8 as amount,
+             h.expected_return_pct::float8 as expected_return_pct,
+             h.return_period, h.due_date::text as due_date, h.due_precision,
+             h.status,
+             coalesce(sum(t.amount), 0)::float8 as account_flow,
+             count(t.id)::int as movement_count
+      from holdings h
+      left join transactions t on t.holding_id = h.id
+      where h.user_id = ${userId}
+      group by h.id
+      order by h.due_date asc nulls last, h.created_at desc`) as HoldingRow[],
+
+  holdingMovements: async (userId: string, p: Params) => {
+    if (!UUID.test(p.holding ?? "")) throw new BadRequest("placement invalide");
+    return (await sql`
+      select t.id, t.account_id, a.name as account_name,
+             t.amount::float8 as amount, t.date::text as date, t.description
+      from transactions t
+      join accounts a on a.id = t.account_id
+      where t.user_id = ${userId} and t.holding_id = ${p.holding}
+      order by t.date desc, t.created_at desc`) as {
+      id: string;
+      account_id: string;
+      account_name: string;
+      amount: number;
+      date: string;
+      description: string;
+    }[];
+  },
+
+  /** Open holdings due within 60 days, or already overdue. */
+  upcomingDue: async (userId: string) =>
+    (await sql`
+      select id, kind, name, currency, amount::float8 as amount,
+             due_date::text as due_date, due_precision, status
+      from holdings
+      where user_id = ${userId}
+        and status not in ('closed', 'defaulted')
+        and due_date is not null
+        and due_date <= current_date + 60
+      order by due_date`) as Pick<
+      HoldingRow,
+      "id" | "kind" | "name" | "currency" | "amount" | "due_date" | "due_precision" | "status"
+    >[],
 } satisfies Record<string, (userId: string, p: Params) => Promise<unknown>>;
 
 export type Queries = typeof queries;

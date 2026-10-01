@@ -112,3 +112,68 @@ export const TransferFormSchema = z
   });
 export type TransferFormInput = z.input<typeof TransferFormSchema>;
 export type TransferFormValues = z.output<typeof TransferFormSchema>;
+
+// Holding (placement, prêt accordé, dette) -----------------------------------
+
+const optionalDecimal = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/\s/g, "").replace(",", "."))
+  .refine((v) => v === "" || /^[-+]?\d+(\.\d+)?$/.test(v), "Valeur invalide")
+  .transform((v) => (v === "" ? null : v.replace(/^\+/, "")));
+
+const optionalDate = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || !Number.isNaN(Date.parse(v)), "Date invalide")
+  .transform((v) => (v === "" ? null : v));
+
+export const HoldingFormSchema = z
+  .object({
+    kind: z.enum(["investment", "loan", "debt"]),
+    name: z.string().trim().min(1, "Le nom est requis").max(120),
+    description: emptyToNull.pipe(z.string().max(1000).nullable()),
+    currency: z.enum(["EUR", "XOF"]),
+    // Large FCFA amounts are typed with spaces: "3 000 000".
+    amount: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/\s/g, ""))
+      .pipe(decimalString)
+      .refine((v) => parseFloat(v) > 0, "Le montant doit être positif"),
+    expected_return_pct: optionalDecimal,
+    return_period: z.enum(["total", "annual"]),
+    due_date: optionalDate,
+    due_precision: z.enum(["day", "month", "year"]),
+    status: z.enum(["planned", "sent", "active", "closed", "defaulted"]),
+    // Creation only: the bank movement that funded (or received) it.
+    account_id: emptyToNull,
+    movement_amount: optionalDecimal,
+    movement_date: optionalDate,
+  })
+  .refine(
+    (d) => !d.account_id || (d.movement_amount && parseFloat(d.movement_amount) > 0),
+    { message: "Indique le montant passé sur le compte", path: ["movement_amount"] },
+  )
+  .refine((d) => !d.account_id || d.movement_date, {
+    message: "Indique la date du mouvement",
+    path: ["movement_date"],
+  });
+export type HoldingFormInput = z.input<typeof HoldingFormSchema>;
+export type HoldingFormValues = z.output<typeof HoldingFormSchema>;
+
+// A movement on a bank account tied to a holding: money out of the account
+// (investing, lending, repaying a debt) or into it (returns, repayment
+// received, borrowed money). Always in euros, like the accounts.
+export const HoldingMovementSchema = z.object({
+  holding_id: z.string().uuid(),
+  account_id: z.string().uuid("Compte requis"),
+  direction: z.enum(["out", "in"]),
+  amount: decimalString.refine(
+    (v) => parseFloat(v) > 0,
+    "Le montant doit être positif",
+  ),
+  date: z.string().date("Date requise"),
+  description: emptyToNull.pipe(z.string().max(200).nullable()),
+});
+export type HoldingMovementInput = z.input<typeof HoldingMovementSchema>;
