@@ -204,3 +204,44 @@ export function reminderText(
     body: days < 0 ? `${what} : ${when}.` : `${what} ${when}.`,
   };
 }
+
+// Movements & reste dû ----------------------------------------------------------
+
+export type MovementDirection = "funding" | "repayment";
+
+/** How a movement reads from the user's side, per kind of holding. */
+export function movementLabel(kind: HoldingKind, direction: MovementDirection): string {
+  if (kind === "debt") return direction === "funding" ? "Emprunté" : "Remboursé";
+  return direction === "funding" ? "Versé" : "Reçu";
+}
+
+/**
+ * Sign of the bank-side amount: money leaves the account when you invest,
+ * lend or repay a debt; it comes in when you borrow or get paid back.
+ */
+export function bankSign(kind: HoldingKind, direction: MovementDirection): 1 | -1 {
+  const outflow = (kind === "debt") === (direction === "repayment");
+  return outflow ? -1 : 1;
+}
+
+export function fromEur(eur: number, currency: Currency): number {
+  return currency === "XOF" ? eur * XOF_PER_EUR : eur;
+}
+
+/**
+ * Below this, nothing is left to pay. For FCFA it absorbs the rounding of a
+ * euro bank amount converted at the parity (0,005 € ≈ 3 FCFA).
+ */
+export function settledThreshold(currency: Currency): number {
+  return currency === "XOF" ? 10 : 0.005;
+}
+
+/** Remaining capital and any surplus already received/paid on top of it. */
+export function outstanding(amount: number, repaid: number, currency: Currency) {
+  const remaining = Math.max(amount - repaid, 0);
+  return {
+    remaining: remaining <= settledThreshold(currency) ? 0 : remaining,
+    surplus: Math.max(repaid - amount, 0),
+    ratio: amount > 0 ? Math.min(repaid / amount, 1) : 0,
+  };
+}

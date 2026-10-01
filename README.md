@@ -42,7 +42,11 @@ Copie les utilisateurs (même id, même mot de passe : les hash bcrypt de Supaba
 
 ## Placements & dettes
 
-Onglet `/placements` : investissements, prêts accordés et dettes, en € ou en FCFA (équivalent € à la parité fixe 655,957). Chaque mouvement sur un compte bancaire (versement, remboursement, revenu) est une transaction liée (`transactions.holding_id`) : il fait bouger le solde du compte mais n'entre ni dans les dépenses ni dans les entrées du mois.
+Onglet `/placements` : investissements, prêts accordés et dettes, en € ou en FCFA (équivalent € à la parité fixe 655,957). Chaque ligne a un registre (`holding_movements`, dans sa devise) : versements et remboursements. Le **reste dû** = montant − remboursements ; à 0 la ligne passe automatiquement à « Remboursé » (et revient « En cours » si on supprime un remboursement). Un mouvement peut :
+
+- passer par un compte bancaire : une transaction liée (`transactions.holding_id`) fait bouger le solde, sans compter comme dépense ou entrée du mois ;
+- être **hors compte** (espèces, en nature) : seul le reste dû bouge ;
+- être une **compensation** : ton débiteur paie directement ton créancier — un remboursement sur le prêt et un sur la dette, liés par `compensation_id`, supprimés ensemble.
 
 **Rappels d'échéance** : carte « Échéances à venir » sur le tableau de bord, badge sur l'onglet et sur l'icône de l'app installée, et notifications push à J-30, J-7, J-1, J0 puis une fois en retard. Le push est envoyé par un cron Vercel quotidien (`vercel.json` → `/api/cron/reminders`, 7h UTC) et demande les variables `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` et `CRON_SECRET`. Sur iPhone, les notifications ne fonctionnent qu'avec l'app ajoutée à l'écran d'accueil.
 

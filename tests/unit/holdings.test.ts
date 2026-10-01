@@ -114,3 +114,22 @@ describe("reminders", () => {
     );
   });
 });
+
+describe("movements", () => {
+  it("signs the bank side from the holding's point of view", async () => {
+    const { bankSign } = await import("@/domain/holdings");
+    expect(bankSign("loan", "funding")).toBe(-1);
+    expect(bankSign("loan", "repayment")).toBe(1);
+    expect(bankSign("debt", "funding")).toBe(1);
+    expect(bankSign("debt", "repayment")).toBe(-1);
+  });
+
+  it("computes the reste dû with a currency tolerance", async () => {
+    const { outstanding } = await import("@/domain/holdings");
+    expect(outstanding(1000, 400, "EUR")).toEqual({ remaining: 600, surplus: 0, ratio: 0.4 });
+    expect(outstanding(1000, 1100, "EUR")).toEqual({ remaining: 0, surplus: 100, ratio: 1 });
+    // 1 524,49 € converted back is 999 998,6 FCFA: that's settled.
+    expect(outstanding(1_000_000, 999_998.6, "XOF").remaining).toBe(0);
+    expect(outstanding(1_000_000, 999_980, "XOF").remaining).toBe(20);
+  });
+});

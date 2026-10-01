@@ -8,6 +8,7 @@ import {
   formatDue,
   formatPct,
   isOpen,
+  outstanding,
   statusLabel,
   toEur,
   type HoldingStatus,
@@ -16,6 +17,7 @@ import { formatMoney } from "@/lib/money";
 import type { HoldingRow } from "@/server/queries";
 import { cn } from "@/lib/utils";
 import { DueChip } from "./due-chip";
+import { RemainingBar } from "./remaining-bar";
 
 const STATUS_TONE: Record<HoldingStatus, string> = {
   planned: "text-muted-foreground ring-white/10",
@@ -28,6 +30,8 @@ const STATUS_TONE: Record<HoldingStatus, string> = {
 function HoldingCard({ holding, onOpen }: { holding: HoldingRow; onOpen: () => void }) {
   const open = isOpen(holding.status);
   const gain = expectedGain(holding.amount, holding.expected_return_pct, holding.return_period);
+  const { remaining, ratio } = outstanding(holding.amount, holding.repaid, holding.currency);
+  const started = holding.repaid > 0;
 
   return (
     <button
@@ -61,13 +65,14 @@ function HoldingCard({ holding, onOpen }: { holding: HoldingRow; onOpen: () => v
       <div className="flex items-end justify-between gap-3">
         <div className="flex flex-col">
           <span data-slot="figure" className="font-display text-xl font-semibold tracking-tight">
-            {formatAmount(holding.amount, holding.currency)}
+            {formatAmount(started ? remaining : holding.amount, holding.currency)}
           </span>
-          {holding.currency === "XOF" && (
-            <span data-slot="figure" className="text-xs text-muted-foreground">
-              ≈ {formatMoney(toEur(holding.amount, "XOF"))}
-            </span>
-          )}
+          <span data-slot="figure" className="text-xs text-muted-foreground">
+            {started && `restant sur ${formatAmount(holding.amount, holding.currency)}`}
+            {started && holding.currency === "XOF" && " · "}
+            {holding.currency === "XOF" &&
+              `≈ ${formatMoney(toEur(started ? remaining : holding.amount, "XOF"))}`}
+          </span>
         </div>
         {gain && holding.expected_return_pct !== null && (
           <span
@@ -87,6 +92,8 @@ function HoldingCard({ holding, onOpen }: { holding: HoldingRow; onOpen: () => v
         )}
       </div>
 
+      {started && <RemainingBar ratio={ratio} debt={holding.kind === "debt"} />}
+
       <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3 text-xs text-muted-foreground">
         {holding.due_date ? (
           <>
@@ -99,7 +106,7 @@ function HoldingCard({ holding, onOpen }: { holding: HoldingRow; onOpen: () => v
         <span className="ml-auto flex items-center gap-1">
           {holding.movement_count > 0
             ? `${holding.movement_count} mouvement${holding.movement_count > 1 ? "s" : ""}`
-            : "Aucun compte lié"}
+            : "Aucun mouvement"}
           <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
         </span>
       </div>

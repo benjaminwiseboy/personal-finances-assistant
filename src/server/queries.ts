@@ -5,6 +5,7 @@ import type {
   DuePrecision,
   HoldingKind,
   HoldingStatus,
+  MovementDirection,
   ReturnPeriod,
 } from "@/domain/holdings";
 
@@ -52,6 +53,8 @@ export type HoldingRow = {
   status: HoldingStatus;
   account_flow: number;
   movement_count: number;
+  /** Repayments so far, in the holding's currency (bank or not). */
+  repaid: number;
 };
 
 export const queries = {
@@ -218,29 +221,43 @@ export const queries = {
              h.expected_return_pct::float8 as expected_return_pct,
              h.return_period, h.due_date::text as due_date, h.due_precision,
              h.status,
-             coalesce(sum(t.amount), 0)::float8 as account_flow,
-             count(t.id)::int as movement_count
+             coalesce((select sum(t.amount) from transactions t
+                       where t.holding_id = h.id), 0)::float8 as account_flow,
+             coalesce((select count(*) from holding_movements m
+                       where m.holding_id = h.id), 0)::int as movement_count,
+             coalesce((select sum(m.amount) from holding_movements m
+                       where m.holding_id = h.id and m.direction = 'repayment'), 0)::float8
+               as repaid
       from holdings h
-      left join transactions t on t.holding_id = h.id
       where h.user_id = ${userId}
-      group by h.id
       order by h.due_date asc nulls last, h.created_at desc`) as HoldingRow[],
 
+  /**
+   * A holding's ledger, newest first: amount in the holding's currency, plus
+   * the bank side (account, euros) or the compensation counterpart.
+   */
   holdingMovements: async (userId: string, p: Params) => {
     if (!UUID.test(p.holding ?? "")) throw new BadRequest("placement invalide");
     return (await sql`
-      select t.id, t.account_id, a.name as account_name,
-             t.amount::float8 as amount, t.date::text as date, t.description
-      from transactions t
-      join accounts a on a.id = t.account_id
-      where t.user_id = ${userId} and t.holding_id = ${p.holding}
-      order by t.date desc, t.created_at desc`) as {
+      select m.id, m.direction, m.amount::float8 as amount, m.date::text as date,
+             m.note, a.name as account_name, t.amount::float8 as bank_amount,
+             other_h.name as counterpart_name
+      from holding_movements m
+      left join transactions t on t.id = m.transaction_id
+      left join accounts a on a.id = t.account_id
+      left join holding_movements other
+        on other.compensation_id = m.compensation_id and other.id <> m.id
+      left join holdings other_h on other_h.id = other.holding_id
+      where m.user_id = ${userId} and m.holding_id = ${p.holding}
+      order by m.date desc, m.created_at desc`) as {
       id: string;
-      account_id: string;
-      account_name: string;
+      direction: MovementDirection;
       amount: number;
       date: string;
-      description: string;
+      note: string | null;
+      account_name: string | null;
+      bank_amount: number | null;
+      counterpart_name: string | null;
     }[];
   },
 
@@ -248,7 +265,10 @@ export const queries = {
   upcomingDue: async (userId: string) =>
     (await sql`
       select id, kind, name, currency, amount::float8 as amount,
-             due_date::text as due_date, due_precision, status
+             due_date::text as due_date, due_precision, status,
+             coalesce((select sum(m.amount) from holding_movements m
+                       where m.holding_id = holdings.id and m.direction = 'repayment'), 0)::float8
+               as repaid
       from holdings
       where user_id = ${userId}
         and status not in ('closed', 'defaulted')
@@ -256,7 +276,7 @@ export const queries = {
         and due_date <= current_date + 60
       order by due_date`) as Pick<
       HoldingRow,
-      "id" | "kind" | "name" | "currency" | "amount" | "due_date" | "due_precision" | "status"
+      "id" | "kind" | "name" | "currency" | "amount" | "due_date" | "due_precision" | "status" | "repaid"
     >[],
 } satisfies Record<string, (userId: string, p: Params) => Promise<unknown>>;
 

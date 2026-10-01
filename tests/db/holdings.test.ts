@@ -27,9 +27,11 @@ vi.mock("@/lib/push", () => ({
 
 import {
   addHoldingMovement,
+  compensate,
   createHolding,
   deleteHolding,
   deleteHoldingMovement,
+  deleteHoldingTransaction,
   updateHolding,
 } from "@/actions/holdings";
 import { deleteTransaction } from "@/actions/transactions";
@@ -165,48 +167,79 @@ describe("movements", () => {
     holding = (await sql`select id from holdings`)[0].id as string;
   });
 
-  it("adds a repayment and aggregates the account flow", async () => {
-    const result = await addHoldingMovement({
+  const repay = (over: Partial<Parameters<typeof addHoldingMovement>[0]> = {}) =>
+    addHoldingMovement({
       holding_id: holding,
       account_id: account,
-      direction: "in",
-      amount: "1100",
+      direction: "repayment",
+      amount: "400",
+      holding_amount: "",
       date: "2026-10-10",
-      description: "",
+      note: "",
+      ...over,
     });
-    expect(result.error).toBeUndefined();
-    expect(await balance()).toBe("1100.00");
 
-    const [row] = await queries.holdings(ME);
-    expect(row).toMatchObject({ account_flow: 100, movement_count: 2, amount: 1000 });
-    const movements = await queries.holdingMovements(ME, { holding });
-    expect(movements.map((m) => m.amount)).toEqual([1100, -1000]);
+  it("records the opening funding in the ledger", async () => {
+    const rows = await queries.holdingMovements(ME, { holding });
+    expect(rows).toEqual([
+      expect.objectContaining({
+        direction: "funding",
+        amount: 1000,
+        account_name: "Hello Bank",
+        bank_amount: -1000,
+      }),
+    ]);
   });
 
-  it("refuses a movement on someone else's holding", async () => {
+  it("tracks the reste dû and closes the loan automatically once repaid", async () => {
+    await repay();
+    let [row] = await queries.holdings(ME);
+    expect(row).toMatchObject({ repaid: 400, account_flow: -600, status: "sent", movement_count: 2 });
+    expect(await balance()).toBe("400.00");
+
+    // Repaid with the +10 %: closed, the extra 100 is a realised gain.
+    await repay({ amount: "700" });
+    [row] = await queries.holdings(ME);
+    expect(row).toMatchObject({ repaid: 1100, status: "closed" });
+  });
+
+  it("reopens when a repayment is deleted", async () => {
+    await repay({ amount: "1000" });
+    expect((await queries.holdings(ME))[0].status).toBe("closed");
+
+    const [m] = await sql`select id from holding_movements where direction = 'repayment'`;
+    expect((await deleteHoldingMovement(m.id as string)).error).toBeUndefined();
+    const [row] = await queries.holdings(ME);
+    expect(row).toMatchObject({ repaid: 0, status: "active" });
+    expect(await balance()).toBe("0.00"); // the bank line went with it
+  });
+
+  it("records a repayment hors compte without touching any account", async () => {
+    expect((await repay({ account_id: "", amount: "250", note: "Espèces" })).error).toBeUndefined();
+    expect(await balance()).toBe("0.00");
+    expect((await queries.holdings(ME))[0].repaid).toBe(250);
+    const [m] = await queries.holdingMovements(ME, { holding });
+    expect(m).toMatchObject({ amount: 250, account_name: null, note: "Espèces" });
+  });
+
+  it("refuses a movement on another user's holding", async () => {
     session.userId = OTHER;
     const otherAccount = await insertAccount(OTHER);
-    const result = await addHoldingMovement({
-      holding_id: holding,
-      account_id: otherAccount,
-      direction: "in",
-      amount: "5",
-      date: "2026-10-10",
-      description: "",
-    });
-    expect(result.error).toBe("Placement introuvable");
+    expect((await repay({ account_id: otherAccount })).error).toBe("Placement introuvable");
   });
 
   it("keeps holding movements out of the regular transaction actions", async () => {
     const [leg] = await sql`select id from transactions`;
     expect((await deleteTransaction(leg.id as string)).error).toMatch(/Placements/);
-    expect((await deleteHoldingMovement(leg.id as string)).error).toBeUndefined();
+    expect((await deleteHoldingTransaction(leg.id as string)).error).toBeUndefined();
     expect(await balance()).toBe("1000.00");
+    expect(await count("holding_movements")).toBe(0);
   });
 
   it("deleting the holding removes its movements and restores balances", async () => {
     expect((await deleteHolding(holding)).error).toBeUndefined();
     expect(await count("transactions")).toBe(0);
+    expect(await count("holding_movements")).toBe(0);
     expect(await balance()).toBe("1000.00");
   });
 
@@ -218,6 +251,106 @@ describe("movements", () => {
         `update transactions set category_id = null where holding_id is null`,
       ),
     ).rejects.toThrow(/transactions_one_origin/);
+  });
+});
+
+describe("FCFA holdings", () => {
+  it("counts a euro bank repayment in FCFA, at parity or as given", async () => {
+    await createHolding({
+      ...base,
+      kind: "debt",
+      name: "Dette papa",
+      currency: "XOF",
+      amount: "1 000 000",
+      status: "active",
+    });
+    const [{ id }] = await sql`select id from holdings`;
+    const pay = (amount: string, holding_amount = "") =>
+      addHoldingMovement({
+        holding_id: id as string,
+        account_id: account,
+        direction: "repayment",
+        amount,
+        holding_amount,
+        date: "2026-10-01",
+        note: "",
+      });
+
+    await pay("762,25");
+    expect((await queries.holdings(ME))[0].repaid).toBeCloseTo(500_000, -1);
+    expect(await balance()).toBe("237.75"); // repaying a debt is an outflow
+
+    await pay("100", "500 000");
+    expect((await queries.holdings(ME))[0].status).toBe("closed"); // within tolerance
+  });
+});
+
+describe("compensation", () => {
+  let loan: string;
+  let debt: string;
+  beforeEach(async () => {
+    await createHolding({ ...base, name: "Prêt à Paul", amount: "1000", status: "active" });
+    await createHolding({
+      ...base,
+      kind: "debt",
+      name: "Dette papa",
+      currency: "XOF",
+      amount: "2 000 000",
+      status: "active",
+    });
+    loan = (await sql`select id from holdings where kind = 'loan'`)[0].id as string;
+    debt = (await sql`select id from holdings where kind = 'debt'`)[0].id as string;
+  });
+
+  const comp = (from = "1000", to = "655 957") =>
+    compensate({
+      from_holding_id: loan,
+      to_holding_id: debt,
+      from_amount: from,
+      to_amount: to,
+      date: "2026-10-05",
+      note: "",
+    });
+
+  it("lowers both restes dus without any bank movement", async () => {
+    expect((await comp()).error).toBeUndefined();
+    const rows = Object.fromEntries((await queries.holdings(ME)).map((h) => [h.kind, h]));
+    expect(rows.loan).toMatchObject({ repaid: 1000, status: "closed" });
+    expect(rows.debt).toMatchObject({ repaid: 655_957, status: "active" });
+    expect(await count("transactions")).toBe(0);
+    expect(await balance()).toBe("1000.00");
+
+    const [m] = await queries.holdingMovements(ME, { holding: debt });
+    expect(m).toMatchObject({ counterpart_name: "Prêt à Paul", account_name: null });
+  });
+
+  it("cancels both halves together", async () => {
+    await comp();
+    const [m] = await sql`select id from holding_movements where holding_id = ${debt}`;
+    await deleteHoldingMovement(m.id as string);
+    expect(await count("holding_movements")).toBe(0);
+    expect((await queries.holdings(ME)).every((h) => h.status === "active")).toBe(true);
+  });
+
+  it("deleting one side reopens the other", async () => {
+    await comp("1000", "2 000 000");
+    expect((await queries.holdings(ME)).every((h) => h.status === "closed")).toBe(true);
+    await deleteHolding(loan);
+    const [row] = await queries.holdings(ME);
+    expect(row).toMatchObject({ kind: "debt", repaid: 0, status: "active" });
+  });
+
+  it("only goes from a loan or investment to a debt", async () => {
+    const result = await compensate({
+      from_holding_id: debt,
+      to_holding_id: loan,
+      from_amount: "1",
+      to_amount: "1",
+      date: "2026-10-05",
+      note: "",
+    });
+    expect(result.error).toBeDefined();
+    expect(await count("holding_movements")).toBe(0);
   });
 });
 

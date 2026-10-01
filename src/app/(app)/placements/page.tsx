@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { KIND_SECTIONS, isOpen, toEur } from "@/domain/holdings";
+import { KIND_SECTIONS, isOpen, outstanding, toEur } from "@/domain/holdings";
 import { fetchData } from "@/lib/fetch-data";
 import type { HoldingRow } from "@/server/queries";
 import { Button } from "@/components/ui/button";
@@ -43,17 +43,30 @@ export default function PlacementsPage() {
   // Re-read the open holding from the list so edits show up immediately.
   const opened = holdings.find((h) => h.id === openId) ?? null;
 
+  // What's still out / still owed, in euros: the reste dû of open lines.
   const totals = useMemo(() => {
     const t = { investment: 0, loan: 0, debt: 0 };
     for (const h of holdings) {
-      if (isOpen(h.status)) t[h.kind] += toEur(h.amount, h.currency);
+      if (!isOpen(h.status)) continue;
+      const { remaining } = outstanding(h.amount, h.repaid, h.currency);
+      t[h.kind] += toEur(remaining, h.currency);
     }
     return t;
   }, [holdings]);
 
+  // Open debts a repayment could settle (compensation).
+  const openDebts = useMemo(
+    () =>
+      holdings
+        .filter((h) => h.kind === "debt" && isOpen(h.status))
+        .map((h) => ({ ...h, remaining: outstanding(h.amount, h.repaid, h.currency).remaining }))
+        .filter((h) => h.remaining > 0),
+    [holdings],
+  );
+
   function reload() {
     // Holding movements change balances and the transactions list too.
-    for (const key of ["holdings", "upcoming-due", "accounts", "dashboard-balance", "dashboard-recent", "transactions"]) {
+    for (const key of ["holdings", "upcoming-due", "accounts", "dashboard-balance", "dashboard-recent", "transactions", "holding-movements"]) {
       queryClient.invalidateQueries({ queryKey: [key] });
     }
   }
@@ -108,6 +121,7 @@ export default function PlacementsPage() {
               key={opened.id}
               holding={opened}
               accounts={accounts}
+              debts={openDebts}
               onChanged={reload}
               onDeleted={() => {
                 setOpenId(null);

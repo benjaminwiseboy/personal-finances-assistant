@@ -162,18 +162,43 @@ export const HoldingFormSchema = z
 export type HoldingFormInput = z.input<typeof HoldingFormSchema>;
 export type HoldingFormValues = z.output<typeof HoldingFormSchema>;
 
-// A movement on a bank account tied to a holding: money out of the account
-// (investing, lending, repaying a debt) or into it (returns, repayment
-// received, borrowed money). Always in euros, like the accounts.
+const positiveAmount = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/\s/g, ""))
+  .pipe(decimalString)
+  .refine((v) => parseFloat(v) > 0, "Le montant doit être positif");
+
+// A movement on a holding. With an account it also moves that account's
+// balance (amount in euros, like the accounts); without one ("hors compte":
+// cash, in kind…) it only updates the reste dû, in the holding's currency.
 export const HoldingMovementSchema = z.object({
   holding_id: z.string().uuid(),
-  account_id: z.string().uuid("Compte requis"),
-  direction: z.enum(["out", "in"]),
-  amount: decimalString.refine(
-    (v) => parseFloat(v) > 0,
-    "Le montant doit être positif",
-  ),
+  account_id: emptyToNull.pipe(z.string().uuid("Compte invalide").nullable()),
+  direction: z.enum(["funding", "repayment"]),
+  amount: positiveAmount,
+  // Bank movement on a FCFA holding: the FCFA amount it counts for, when it
+  // differs from the parity conversion. Ignored otherwise.
+  holding_amount: optionalDecimal,
   date: z.string().date("Date requise"),
-  description: emptyToNull.pipe(z.string().max(200).nullable()),
+  note: emptyToNull.pipe(z.string().max(200).nullable()),
 });
 export type HoldingMovementInput = z.input<typeof HoldingMovementSchema>;
+
+// Your debtor pays your creditor directly: a repayment on a loan/investment
+// and a repayment on a debt, booked together, no bank account involved. Each
+// side is in its own holding's currency.
+export const CompensationSchema = z
+  .object({
+    from_holding_id: z.string().uuid("Choisis le prêt ou l’investissement"),
+    to_holding_id: z.string().uuid("Choisis la dette à régler"),
+    from_amount: positiveAmount,
+    to_amount: positiveAmount,
+    date: z.string().date("Date requise"),
+    note: emptyToNull.pipe(z.string().max(200).nullable()),
+  })
+  .refine((d) => d.from_holding_id !== d.to_holding_id, {
+    message: "Choisis deux lignes différentes",
+    path: ["to_holding_id"],
+  });
+export type CompensationInput = z.input<typeof CompensationSchema>;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { KIND_LABELS, formatAmount, formatDue } from "@/domain/holdings";
+import { KIND_LABELS, formatAmount, formatDue, outstanding } from "@/domain/holdings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DueChip } from "@/components/placements/due-chip";
 import { useUpcomingDue } from "@/components/placements/use-upcoming-due";
@@ -44,7 +44,7 @@ export function UpcomingDue() {
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <span data-slot="figure" className="text-sm font-medium">
-                {formatAmount(h.amount, h.currency)}
+                {formatAmount(outstanding(h.amount, h.repaid, h.currency).remaining, h.currency)}
               </span>
               <DueChip dueDate={h.due_date!} />
             </div>

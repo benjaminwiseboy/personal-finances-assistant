@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
 import { deleteTransaction } from "@/actions/transactions";
 import { deleteTransfer } from "@/actions/transfers";
-import { deleteHoldingMovement } from "@/actions/holdings";
+import { deleteHoldingTransaction } from "@/actions/holdings";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -67,7 +67,7 @@ export function TransactionList({
   async function handleDelete(row: TransactionRow) {
     if (row.holding_id) {
       if (!confirm(`Supprimer ce mouvement lié à « ${row.holding_name} » ?`)) return;
-      const result = await deleteHoldingMovement(row.id);
+      const result = await deleteHoldingTransaction(row.id);
       if (result.error) {
         toast.error(result.error);
         return;

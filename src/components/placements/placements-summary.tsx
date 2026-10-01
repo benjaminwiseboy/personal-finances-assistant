@@ -35,7 +35,7 @@ export function PlacementsSummary({
           {formatMoney(net)}
         </span>
         <span className="text-sm text-muted-foreground">
-          Ce qu’on te doit moins ce que tu dois · équivalent en euros
+          Ce qu’on te doit encore moins ce que tu dois encore · en euros
         </span>
       </div>
 
