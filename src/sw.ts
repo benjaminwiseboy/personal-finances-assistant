@@ -10,12 +10,23 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+// defaultCache already serves /api/auth network-only and /api/* (our
+// /api/data reads) network-first, so the last-seen figures stay readable
+// offline. The login page purges that "apis" cache on sign-out.
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: defaultCache,
+  fallbacks: {
+    entries: [
+      {
+        url: "/~offline",
+        matcher: ({ request }) => request.destination === "document",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();

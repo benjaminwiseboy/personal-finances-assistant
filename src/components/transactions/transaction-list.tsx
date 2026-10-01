@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/money";
 import { deleteTransaction } from "@/actions/transactions";
+import { deleteTransfer } from "@/actions/transfers";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -35,6 +37,17 @@ type TransactionRow = {
 
 type Option = { id: string; name: string };
 
+const DAY_MONTH = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "short",
+  year: "2-digit",
+});
+
+function formatDate(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : DAY_MONTH.format(parsed);
+}
+
 export function TransactionList({
   transactions,
   accounts,
@@ -49,63 +62,105 @@ export function TransactionList({
   const [editing, setEditing] = useState<TransactionRow | null>(null);
 
   async function handleDelete(row: TransactionRow) {
-    if (row.transfer_id) {
-      toast.error(
-        "Cette transaction fait partie d'un transfert : supprimez le transfert dans l'onglet Transferts",
-      );
+    const isTransfer = !!row.transfer_id;
+    if (
+      !confirm(
+        isTransfer
+          ? "Supprimer ce transfert ? Les deux écritures liées seront retirées."
+          : "Supprimer cette transaction ?",
+      )
+    ) {
       return;
     }
-    if (!confirm("Supprimer cette transaction ?")) return;
-    const result = await deleteTransaction(row.id);
+    const result = isTransfer
+      ? await deleteTransfer(row.transfer_id!)
+      : await deleteTransaction(row.id);
     if (result.error) {
       toast.error(result.error);
       return;
     }
-    toast.success("Transaction supprimée");
+    toast.success(isTransfer ? "Transfert supprimé" : "Transaction supprimée");
     onChanged();
   }
 
+  if (transactions.length === 0) {
+    return (
+      <div className="glass rounded-2xl bg-white/[0.03] px-6 py-14 text-center ring-1 ring-white/10">
+        <p className="text-sm text-muted-foreground">
+          Aucune opération pour cette sélection. Enregistres-en une ci-dessus ou
+          change de mois.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div className="glass overflow-hidden rounded-2xl bg-white/[0.03] ring-1 ring-white/10">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
+            <TableHead className="pl-4">Date</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Compte</TableHead>
             <TableHead>Catégorie</TableHead>
             <TableHead className="text-right">Montant</TableHead>
-            <TableHead />
+            <TableHead className="pr-4" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.map((tx) => (
             <TableRow key={tx.id}>
-              <TableCell>{tx.date}</TableCell>
-              <TableCell>{tx.description}</TableCell>
-              <TableCell>{tx.account_name}</TableCell>
-              <TableCell>{tx.category_name ?? "Transfert"}</TableCell>
               <TableCell
-                className={`text-right ${tx.amount < 0 ? "text-red-600" : "text-emerald-600"}`}
+                data-slot="figure"
+                className="pl-4 font-mono text-xs whitespace-nowrap text-muted-foreground"
+              >
+                {formatDate(tx.date)}
+              </TableCell>
+              <TableCell className="max-w-56 truncate">
+                {tx.description}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {tx.account_name}
+              </TableCell>
+              <TableCell>
+                {tx.transfer_id ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber/10 px-2 py-0.5 text-xs font-medium text-amber ring-1 ring-amber/20">
+                    <ArrowRight className="size-3" />
+                    Transfert
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {tx.category_name ?? "—"}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell
+                className={`text-right font-medium ${tx.amount < 0 ? "text-foreground" : "text-mint"}`}
+                data-slot="figure"
               >
                 {formatMoney(tx.amount)}
               </TableCell>
-              <TableCell className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!!tx.transfer_id}
-                  onClick={() => setEditing(tx)}
-                >
-                  Modifier
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(tx)}
-                >
-                  Supprimer
-                </Button>
+              <TableCell className="pr-4">
+                <div className="flex justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Modifier"
+                    disabled={!!tx.transfer_id}
+                    onClick={() => setEditing(tx)}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Supprimer"
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => handleDelete(tx)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -137,6 +192,6 @@ export function TransactionList({
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

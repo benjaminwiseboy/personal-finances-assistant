@@ -1,31 +1,53 @@
+import { LogOut } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
-import { NavLinks } from "./nav-links";
+import { NavRail, NavTabs } from "./nav-links";
+import { Wordmark } from "./wordmark";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
-        <span className="flex items-center gap-2 font-semibold">
-          <span
-            aria-hidden
-            className="flex size-6 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
+    <div className="ember-bloom relative flex min-h-screen bg-background">
+      {/* Rail — desktop */}
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/60 px-3 py-5 backdrop-blur-xl md:flex">
+        <div className="px-3 pb-6">
+          <Wordmark />
+        </div>
+        <NavRail />
+        <form action={logoutAction} className="mt-auto px-1">
+          <Button
+            type="submit"
+            variant="ghost"
+            className="w-full justify-start text-muted-foreground"
           >
-            €
-          </span>
-          Mes Finances
-        </span>
-        <div className="flex items-center gap-4">
-          <NavLinks className="hidden md:flex" />
+            <LogOut />
+            Déconnexion
+          </Button>
+        </form>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top bar — mobile only; the rail carries this on desktop */}
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
+          <Wordmark />
           <form action={logoutAction}>
-            <Button type="submit" variant="outline" size="sm">
-              Déconnexion
+            <Button
+              type="submit"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Déconnexion"
+            >
+              <LogOut />
             </Button>
           </form>
-        </div>
-      </header>
-      <NavLinks className="flex overflow-x-auto border-b border-border bg-card px-2 py-1 md:hidden" />
-      <main className="flex-1 p-4 md:p-6">{children}</main>
+        </header>
+
+        <main className="flex-1 p-4 pb-24 md:p-8 md:pb-8">
+          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        </main>
+      </div>
+
+      {/* Tabs — mobile */}
+      <NavTabs className="fixed inset-x-0 bottom-0 z-30 md:hidden" />
     </div>
   );
 }

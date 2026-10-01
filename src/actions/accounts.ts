@@ -1,11 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { sql } from "@/lib/db";
+import { getUserId } from "@/lib/session";
 import {
   AccountFormSchema,
   type AccountFormInput,
 } from "@/domain/validators";
+
+function revalidate() {
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+}
 
 export async function createAccount(
   input: AccountFormInput,
@@ -15,23 +21,19 @@ export async function createAccount(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { error } = await supabase.from("accounts").insert({
-    user_id: user.id,
-    name: parsed.data.name,
-    type: parsed.data.type,
-    initial_balance: parsed.data.initial_balance,
-  });
+  try {
+    await sql`
+      insert into accounts (user_id, name, type, initial_balance)
+      values (${userId}, ${parsed.data.name}, ${parsed.data.type},
+              ${parsed.data.initial_balance})`;
+  } catch {
+    return { error: "Échec de la création du compte" };
+  }
 
-  if (error) return { error: "Échec de la création du compte" };
-
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }
 
@@ -44,60 +46,69 @@ export async function updateAccount(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { error } = await supabase
-    .from("accounts")
-    .update({
-      name: parsed.data.name,
-      type: parsed.data.type,
-      initial_balance: parsed.data.initial_balance,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+  try {
+    await sql`
+      update accounts
+      set name = ${parsed.data.name}, type = ${parsed.data.type},
+          initial_balance = ${parsed.data.initial_balance}
+      where id = ${id} and user_id = ${userId}`;
+  } catch {
+    return { error: "Échec de la mise à jour du compte" };
+  }
 
-  if (error) return { error: "Échec de la mise à jour du compte" };
+  revalidate();
+  return {};
+}
 
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+export async function setPrimaryAccount(
+  id: string,
+): Promise<{ error?: string }> {
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
+
+  try {
+    // One transaction: clear the current primary first so the
+    // one-primary-per-user index is happy, then set the new one.
+    await sql.transaction([
+      sql`update accounts set is_primary = false
+          where user_id = ${userId} and is_primary`,
+      sql`update accounts set is_primary = true
+          where id = ${id} and user_id = ${userId}`,
+    ]);
+  } catch {
+    return { error: "Échec de la mise à jour du compte principal" };
+  }
+
+  revalidate();
   return {};
 }
 
 export async function deleteAccount(
   id: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { data: linked, error: linkedError } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("account_id", id)
-    .limit(1);
+  try {
+    const linked = await sql`
+      select 1 from transactions
+      where account_id = ${id} and user_id = ${userId}
+      limit 1`;
+    if (linked.length > 0) {
+      return {
+        error:
+          "Impossible de supprimer ce compte : des transactions y sont rattachées",
+      };
+    }
 
-  if (linkedError) return { error: "Échec de la vérification du compte" };
-  if (linked && linked.length > 0) {
-    return {
-      error:
-        "Impossible de supprimer ce compte : des transactions y sont rattachées",
-    };
+    await sql`delete from accounts where id = ${id} and user_id = ${userId}`;
+  } catch {
+    return { error: "Échec de la suppression du compte" };
   }
 
-  const { error } = await supabase
-    .from("accounts")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) return { error: "Échec de la suppression du compte" };
-
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }

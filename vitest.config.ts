@@ -10,13 +10,14 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**", "src/domain/**", "src/actions/**"],
-      exclude: ["src/lib/supabase/**"],
+      include: ["src/lib/**", "src/domain/**", "src/actions/**", "src/server/**"],
+      exclude: ["src/lib/db.ts", "src/lib/auth.ts"],
     },
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "server-only": path.resolve(__dirname, "./tests/helpers/empty-module.ts"),
     },
   },
 });

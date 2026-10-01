@@ -1,11 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { sql } from "@/lib/db";
+import { getUserId } from "@/lib/session";
 import {
   TransferFormSchema,
   type TransferFormInput,
 } from "@/domain/validators";
+
+function revalidate() {
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+}
 
 export async function createTransfer(
   input: TransferFormInput,
@@ -15,37 +22,35 @@ export async function createTransfer(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("create_transfer", {
-    p_from_account_id: parsed.data.from_account_id,
-    p_to_account_id: parsed.data.to_account_id,
-    p_amount: parsed.data.amount,
-    p_date: parsed.data.date,
-    p_description: parsed.data.description,
-  });
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  if (error) return { error: "Échec de la création du transfert" };
+  try {
+    await sql`
+      select create_transfer(
+        ${userId}, ${parsed.data.from_account_id}, ${parsed.data.to_account_id},
+        ${parsed.data.amount}, ${parsed.data.date}, ${parsed.data.description}
+      )`;
+  } catch {
+    return { error: "Échec de la création du transfert" };
+  }
 
-  revalidatePath("/transfers");
-  revalidatePath("/transactions");
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }
 
 export async function deleteTransfer(
   id: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("delete_transfer", {
-    p_transfer_id: id,
-  });
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  if (error) return { error: "Échec de la suppression du transfert" };
+  try {
+    await sql`select delete_transfer(${userId}, ${id})`;
+  } catch {
+    return { error: "Échec de la suppression du transfert" };
+  }
 
-  revalidatePath("/transfers");
-  revalidatePath("/transactions");
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }

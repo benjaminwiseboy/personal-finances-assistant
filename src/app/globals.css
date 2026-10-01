@@ -5,13 +5,23 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Money semantics: ember = money leaving, mint = money arriving. */
+  --color-ember: var(--ember);
+  --color-ember-data: var(--ember-data);
+  --color-amber: var(--amber);
+  --color-mint: var(--mint);
+  --color-mint-data: var(--mint-data);
+
   --color-brand-accent-foreground: var(--brand-accent-foreground);
   --color-brand-accent: var(--brand-accent);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+
+  --font-sans: var(--font-sans-ui);
+  --font-heading: var(--font-display);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono-data);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -50,80 +60,64 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Dark-only surface. The ink carries a hair of violet so ember reads warmer
+   against it than it would on a neutral gray. */
 :root {
-  /* Brand: deep forest/pine green (private evening ledger), warm clove
-     amber as the second brand accent. Neutrals carry a hairline tint
-     toward the brand hue (160) instead of pure gray. */
-  --brand-accent: oklch(0.64 0.13 75);
-  --brand-accent-foreground: oklch(0.99 0.01 75);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0.012 160);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.012 160);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.012 160);
-  --primary: oklch(0.32 0.085 160);
-  --primary-foreground: oklch(0.985 0.008 160);
-  --secondary: oklch(0.97 0.01 160);
-  --secondary-foreground: oklch(0.205 0.015 160);
-  --muted: oklch(0.97 0.01 160);
-  --muted-foreground: oklch(0.52 0.02 160);
-  --accent: oklch(0.97 0.01 160);
-  --accent-foreground: oklch(0.205 0.015 160);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.012 160);
-  --input: oklch(0.9 0.012 160);
-  --ring: oklch(0.5 0.09 160);
-  --chart-1: oklch(0.32 0.085 160);
-  --chart-2: oklch(0.64 0.13 75);
-  --chart-3: oklch(0.556 0.02 160);
-  --chart-4: oklch(0.439 0.03 160);
-  --chart-5: oklch(0.269 0.02 160);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.006 160);
-  --sidebar-foreground: oklch(0.145 0.012 160);
-  --sidebar-primary: oklch(0.32 0.085 160);
-  --sidebar-primary-foreground: oklch(0.985 0.008 160);
-  --sidebar-accent: oklch(0.97 0.01 160);
-  --sidebar-accent-foreground: oklch(0.205 0.015 160);
-  --sidebar-border: oklch(0.9 0.012 160);
-  --sidebar-ring: oklch(0.5 0.09 160);
-}
+  --ink: oklch(0.145 0.008 300);
+  --ink-raised: oklch(0.185 0.009 300);
+  --ink-lift: oklch(0.225 0.01 300);
 
-.dark {
-  --brand-accent: oklch(0.68 0.13 75);
-  --brand-accent-foreground: oklch(0.14 0.02 75);
-  --background: oklch(0.16 0.014 160);
-  --foreground: oklch(0.94 0.008 160);
-  --card: oklch(0.21 0.016 160);
-  --card-foreground: oklch(0.94 0.008 160);
-  --popover: oklch(0.23 0.016 160);
-  --popover-foreground: oklch(0.94 0.008 160);
-  --primary: oklch(0.64 0.1 160);
-  --primary-foreground: oklch(0.15 0.02 160);
-  --secondary: oklch(0.27 0.018 160);
-  --secondary-foreground: oklch(0.94 0.008 160);
-  --muted: oklch(0.27 0.018 160);
-  --muted-foreground: oklch(0.72 0.02 160);
-  --accent: oklch(0.27 0.018 160);
-  --accent-foreground: oklch(0.94 0.008 160);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0.01 160 / 12%);
-  --input: oklch(1 0.01 160 / 15%);
-  --ring: oklch(0.6 0.09 160);
-  --chart-1: oklch(0.64 0.1 160);
-  --chart-2: oklch(0.68 0.13 75);
-  --chart-3: oklch(0.556 0.02 160);
-  --chart-4: oklch(0.7 0.03 160);
-  --chart-5: oklch(0.269 0.02 160);
-  --sidebar: oklch(0.21 0.016 160);
-  --sidebar-foreground: oklch(0.94 0.008 160);
-  --sidebar-primary: oklch(0.64 0.1 160);
-  --sidebar-primary-foreground: oklch(0.15 0.02 160);
-  --sidebar-accent: oklch(0.27 0.018 160);
-  --sidebar-accent-foreground: oklch(0.94 0.008 160);
-  --sidebar-border: oklch(1 0.01 160 / 12%);
-  --sidebar-ring: oklch(0.6 0.09 160);
+  /* UI ember — text and controls, tuned for contrast on ink. */
+  --ember: oklch(0.7 0.19 45);
+  --amber: oklch(0.79 0.15 62);
+  --mint: oklch(0.75 0.15 165);
+
+  /* Data ember/mint — validated against the dark chart surface
+     (lightness band, CVD separation, contrast). Do not brighten these
+     without re-running the palette validator. */
+  --ember-data: oklch(0.65 0.19 42);
+  --mint-data: oklch(0.66 0.14 163);
+
+  --brand-accent: var(--ember);
+  --brand-accent-foreground: oklch(0.14 0.02 45);
+
+  --background: var(--ink);
+  --foreground: oklch(0.96 0.004 300);
+  --card: var(--ink-raised);
+  --card-foreground: oklch(0.96 0.004 300);
+  --popover: var(--ink-lift);
+  --popover-foreground: oklch(0.96 0.004 300);
+
+  --primary: var(--ember);
+  --primary-foreground: oklch(0.16 0.02 45);
+  --secondary: oklch(0.26 0.012 300);
+  --secondary-foreground: oklch(0.96 0.004 300);
+  --muted: oklch(0.26 0.012 300);
+  --muted-foreground: oklch(0.68 0.012 300);
+  --accent: oklch(0.28 0.02 45);
+  --accent-foreground: oklch(0.96 0.004 300);
+  --destructive: oklch(0.65 0.2 18);
+
+  --border: oklch(1 0.01 300 / 10%);
+  --input: oklch(1 0.01 300 / 14%);
+  --ring: var(--ember);
+
+  --chart-1: var(--ember-data);
+  --chart-2: var(--mint-data);
+  --chart-3: oklch(0.72 0.16 55);
+  --chart-4: oklch(0.58 0.16 35);
+  --chart-5: oklch(0.45 0.12 30);
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.165 0.009 300);
+  --sidebar-foreground: oklch(0.96 0.004 300);
+  --sidebar-primary: var(--ember);
+  --sidebar-primary-foreground: oklch(0.16 0.02 45);
+  --sidebar-accent: oklch(0.26 0.012 300);
+  --sidebar-accent-foreground: oklch(0.96 0.004 300);
+  --sidebar-border: oklch(1 0.01 300 / 10%);
+  --sidebar-ring: var(--ember);
 }
 
 @layer base {
@@ -132,8 +126,78 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans-ui), ui-sans-serif, system-ui, sans-serif;
   }
-  html {
-    @apply font-sans;
+  /* Money is the subject: figures line up in columns everywhere. */
+  .font-mono,
+  [data-slot="figure"] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* The ember bloom — a single warm light source anchored off the top-right of
+   the shell, as if the ledger sits near a fire. Used once, on the app shell. */
+@utility ember-bloom {
+  background-image:
+    radial-gradient(
+      60rem 40rem at 100% -10%,
+      color-mix(in oklch, var(--ember) 18%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      40rem 30rem at 10% 110%,
+      color-mix(in oklch, var(--ember) 7%, transparent),
+      transparent 65%
+    );
+}
+
+/* Raised surfaces catch the light from above. */
+@utility surface {
+  background-image: linear-gradient(
+    to bottom,
+    oklch(1 0 0 / 6%),
+    oklch(1 0 0 / 0%) 45%
+  );
+}
+
+/* Translucent panel: lets the ember-bloom behind the shell glow through,
+   frosted so content underneath reads as soft light, not detail. Pair with a
+   bg-* that already carries alpha (e.g. bg-white/[0.04]). */
+@utility glass {
+  background-image: linear-gradient(
+    to bottom,
+    oklch(1 0 0 / 8%),
+    oklch(1 0 0 / 2%) 40%
+  );
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* Warm icon tile — the orange chip used on account/action cards. */
+@utility ember-tile {
+  background-image: linear-gradient(
+    145deg,
+    color-mix(in oklch, var(--amber) 48%, transparent),
+    color-mix(in oklch, var(--ember) 24%, transparent)
+  );
+}
+
+@utility text-ember-gradient {
+  background-image: linear-gradient(
+    100deg,
+    var(--ember) 0%,
+    var(--amber) 100%
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { fetchData } from "@/lib/fetch-data";
 import {
   Dialog,
   DialogContent,
@@ -26,18 +26,15 @@ export default function CategoriesPage() {
   const [creating, setCreating] = useState(false);
 
   const { data: categories = [] } = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("categories")
-        .select("id, name, type, parent_id")
-        .order("name");
-      return (data ?? []) as CategoryRow[];
-    },
+    // Namespaced sub-key: the transactions picker uses ["categories","options"]
+    // with a lighter {id,name} shape. Sharing a bare ["categories"] key served
+    // that shape here and the tree (which groups by type/parent) rendered empty.
+    queryKey: ["categories", "tree"],
+    queryFn: () => fetchData("categories"),
   });
 
   function reload() {
+    // Prefix match: invalidates both ["categories","tree"] and the picker.
     queryClient.invalidateQueries({ queryKey: ["categories"] });
   }
 

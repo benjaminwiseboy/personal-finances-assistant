@@ -38,15 +38,27 @@ export function MonthNav({
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <Button variant="outline" size="icon" onClick={goPrev} aria-label="Mois précédent">
-        <ChevronLeft className="h-4 w-4" />
+    <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1 ring-1 ring-white/10">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-full"
+        onClick={goPrev}
+        aria-label="Mois précédent"
+      >
+        <ChevronLeft />
       </Button>
-      <span className="min-w-40 text-center font-medium">
+      <span className="min-w-36 text-center font-display text-sm font-medium tracking-tight">
         {MONTH_LABELS[month - 1]} {year}
       </span>
-      <Button variant="outline" size="icon" onClick={goNext} aria-label="Mois suivant">
-        <ChevronRight className="h-4 w-4" />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="rounded-full"
+        onClick={goNext}
+        aria-label="Mois suivant"
+      >
+        <ChevronRight />
       </Button>
     </div>
   );

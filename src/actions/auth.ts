@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { APIError } from "better-auth/api";
+import { getAuth } from "@/lib/auth";
 
 export async function loginAction(
   _prevState: { error: string } | null,
@@ -14,21 +16,21 @@ export async function loginAction(
     return { error: "Email et mot de passe requis" };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    return { error: "Identifiants invalides" };
+  try {
+    // nextCookies() sets the session cookie on the action's response.
+    await getAuth().api.signInEmail({
+      body: { email, password },
+      headers: await headers(),
+    });
+  } catch (error) {
+    if (error instanceof APIError) return { error: "Identifiants invalides" };
+    throw error;
   }
 
   redirect("/dashboard");
 }
 
 export async function logoutAction() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await getAuth().api.signOut({ headers: await headers() });
   redirect("/login");
 }

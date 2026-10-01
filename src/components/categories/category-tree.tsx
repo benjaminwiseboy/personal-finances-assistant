@@ -45,7 +45,7 @@ export function CategoryTree({
     <div className="flex flex-col gap-6">
       {(["income", "expense"] as const).map((type) => (
         <div key={type} className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-zinc-500">
+          <h2 className="font-mono text-[0.6875rem] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             {CATEGORY_TYPE_LABELS[type]}
           </h2>
           {roots
@@ -104,7 +104,7 @@ function CategoryRowItem({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+    <div className="surface flex items-center justify-between rounded-lg bg-white/[0.02] px-3 py-2 ring-1 ring-white/10 transition-colors hover:bg-white/[0.05]">
       <span>{category.name}</span>
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={onEdit}>

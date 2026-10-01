@@ -57,6 +57,19 @@ export const CategoryFormSchema = z.object({
 export type CategoryFormInput = z.input<typeof CategoryFormSchema>;
 export type CategoryFormValues = z.output<typeof CategoryFormSchema>;
 
+// Budget ----------------------------------------------------------------
+// A recurring monthly spending limit on one expense category.
+
+export const BudgetFormSchema = z.object({
+  category_id: z.string().uuid("Catégorie requise"),
+  amount: decimalString.refine(
+    (v) => parseFloat(v) > 0,
+    "Le montant doit être positif",
+  ),
+});
+export type BudgetFormInput = z.input<typeof BudgetFormSchema>;
+export type BudgetFormValues = z.output<typeof BudgetFormSchema>;
+
 // Transaction ----------------------------------------------------------------
 // The amount entered here is always zero or positive (zero is allowed, e.g.
 // for a balance adjustment/régularisation): the sign (credit/debit) is

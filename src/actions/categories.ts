@@ -1,11 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { sql } from "@/lib/db";
+import { getUserId } from "@/lib/session";
 import {
   CategoryFormSchema,
   type CategoryFormInput,
 } from "@/domain/validators";
+
+/** The parent must be one of the user's root categories (max depth 2). */
+async function checkParent(
+  parentId: string,
+  userId: string,
+): Promise<{ error?: string }> {
+  const [parent] = await sql`
+    select id, parent_id from categories
+    where id = ${parentId} and user_id = ${userId}`;
+  if (!parent) return { error: "Catégorie parente introuvable" };
+  if (parent.parent_id) {
+    return { error: "La catégorie parente doit être une catégorie racine" };
+  }
+  return {};
+}
 
 export async function createCategory(
   input: CategoryFormInput,
@@ -15,33 +31,22 @@ export async function createCategory(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  if (parsed.data.parent_id) {
-    const { data: parent } = await supabase
-      .from("categories")
-      .select("id, parent_id")
-      .eq("id", parsed.data.parent_id)
-      .eq("user_id", user.id)
-      .single();
-    if (!parent) return { error: "Catégorie parente introuvable" };
-    if (parent.parent_id) {
-      return { error: "La catégorie parente doit être une catégorie racine" };
+  try {
+    if (parsed.data.parent_id) {
+      const check = await checkParent(parsed.data.parent_id, userId);
+      if (check.error) return check;
     }
+
+    await sql`
+      insert into categories (user_id, name, type, parent_id)
+      values (${userId}, ${parsed.data.name}, ${parsed.data.type},
+              ${parsed.data.parent_id})`;
+  } catch {
+    return { error: "Échec de la création de la catégorie" };
   }
-
-  const { error } = await supabase.from("categories").insert({
-    user_id: user.id,
-    name: parsed.data.name,
-    type: parsed.data.type,
-    parent_id: parsed.data.parent_id,
-  });
-
-  if (error) return { error: "Échec de la création de la catégorie" };
 
   revalidatePath("/categories");
   return {};
@@ -56,11 +61,8 @@ export async function updateCategory(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
   if (parsed.data.parent_id === id) {
     return {
@@ -68,42 +70,31 @@ export async function updateCategory(
     };
   }
 
-  if (parsed.data.parent_id) {
-    const { data: parent } = await supabase
-      .from("categories")
-      .select("id, parent_id")
-      .eq("id", parsed.data.parent_id)
-      .eq("user_id", user.id)
-      .single();
-    if (!parent) return { error: "Catégorie parente introuvable" };
-    if (parent.parent_id) {
-      return { error: "La catégorie parente doit être une catégorie racine" };
+  try {
+    if (parsed.data.parent_id) {
+      const check = await checkParent(parsed.data.parent_id, userId);
+      if (check.error) return check;
+
+      const children = await sql`
+        select 1 from categories
+        where parent_id = ${id} and user_id = ${userId}
+        limit 1`;
+      if (children.length > 0) {
+        return {
+          error:
+            "Impossible de déplacer cette catégorie : elle a des sous-catégories",
+        };
+      }
     }
 
-    const { data: children } = await supabase
-      .from("categories")
-      .select("id")
-      .eq("parent_id", id)
-      .limit(1);
-    if (children && children.length > 0) {
-      return {
-        error:
-          "Impossible de déplacer cette catégorie : elle a des sous-catégories",
-      };
-    }
+    await sql`
+      update categories
+      set name = ${parsed.data.name}, type = ${parsed.data.type},
+          parent_id = ${parsed.data.parent_id}
+      where id = ${id} and user_id = ${userId}`;
+  } catch {
+    return { error: "Échec de la mise à jour de la catégorie" };
   }
-
-  const { error } = await supabase
-    .from("categories")
-    .update({
-      name: parsed.data.name,
-      type: parsed.data.type,
-      parent_id: parsed.data.parent_id,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) return { error: "Échec de la mise à jour de la catégorie" };
 
   revalidatePath("/categories");
   return {};
@@ -112,46 +103,36 @@ export async function updateCategory(
 export async function deleteCategory(
   id: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { data: linkedTx, error: txError } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("category_id", id)
-    .limit(1);
+  try {
+    const linkedTx = await sql`
+      select 1 from transactions
+      where category_id = ${id} and user_id = ${userId}
+      limit 1`;
+    if (linkedTx.length > 0) {
+      return {
+        error:
+          "Impossible de supprimer cette catégorie : des transactions y sont rattachées",
+      };
+    }
 
-  if (txError) return { error: "Échec de la vérification de la catégorie" };
-  if (linkedTx && linkedTx.length > 0) {
-    return {
-      error:
-        "Impossible de supprimer cette catégorie : des transactions y sont rattachées",
-    };
+    const children = await sql`
+      select 1 from categories
+      where parent_id = ${id} and user_id = ${userId}
+      limit 1`;
+    if (children.length > 0) {
+      return {
+        error:
+          "Impossible de supprimer cette catégorie : elle a des sous-catégories",
+      };
+    }
+
+    await sql`delete from categories where id = ${id} and user_id = ${userId}`;
+  } catch {
+    return { error: "Échec de la suppression de la catégorie" };
   }
-
-  const { data: children, error: childError } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("parent_id", id)
-    .limit(1);
-
-  if (childError) return { error: "Échec de la vérification de la catégorie" };
-  if (children && children.length > 0) {
-    return {
-      error:
-        "Impossible de supprimer cette catégorie : elle a des sous-catégories",
-    };
-  }
-
-  const { error } = await supabase
-    .from("categories")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) return { error: "Échec de la suppression de la catégorie" };
 
   revalidatePath("/categories");
   return {};

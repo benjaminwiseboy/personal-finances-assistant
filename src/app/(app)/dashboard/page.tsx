@@ -1,77 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { budgetStatus } from "@/domain/budgets";
+import { fetchData } from "@/lib/fetch-data";
 import { MonthNav } from "@/components/dashboard/month-nav";
-import { KpiCards } from "@/components/dashboard/kpi-cards";
+import { BalanceHero } from "@/components/dashboard/balance-hero";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
+import { BudgetWatch } from "@/components/dashboard/budget-watch";
+import type { BudgetView } from "@/components/budgets/budget-list";
 
 export default function DashboardPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
 
+  // Balances across all accounts — carryover included, not month-scoped.
+  const { data: balance = { total: 0, count: 0, primary: null } } = useQuery({
+    queryKey: ["dashboard-balance"],
+    queryFn: async () => {
+      const rows = await fetchData("accountBalances");
+      const primary = rows.find((r) => r.is_primary) ?? null;
+      return {
+        total: rows.reduce((sum, r) => sum + r.balance, 0),
+        count: rows.length,
+        primary,
+      };
+    },
+  });
+
+  // Headline = the primary account (day-to-day money) when one is set;
+  // otherwise the total across all accounts.
+  const hero = balance.primary
+    ? {
+        label: "Compte principal",
+        value: balance.primary.balance,
+        subline: balance.primary.name,
+      }
+    : {
+        label: "Solde total",
+        value: balance.total,
+        subline:
+          balance.count > 0
+            ? `Réparti sur ${balance.count} compte${balance.count > 1 ? "s" : ""} · définis ton compte principal dans Comptes`
+            : "Aucun compte pour l’instant.",
+      };
+
   const { data: totals = { total_income: 0, total_expense: 0, net: 0 } } =
     useQuery({
       queryKey: ["dashboard-totals", year, month],
-      queryFn: async () => {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from("v_monthly_totals")
-          .select("total_income, total_expense, net")
-          .eq("year", year)
-          .eq("month", month)
-          .maybeSingle();
-        return data ?? { total_income: 0, total_expense: 0, net: 0 };
-      },
+      queryFn: () => fetchData("monthTotals", { year, month }),
     });
 
   const { data: categoryData = [] } = useQuery({
     queryKey: ["dashboard-categories", year, month],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("v_category_monthly_summary")
-        .select("category_name, total")
-        .eq("year", year)
-        .eq("month", month)
-        .eq("type", "expense")
-        .order("total", { ascending: false });
-      return (data ?? []) as { category_name: string; total: number }[];
-    },
+    queryFn: () => fetchData("monthExpensesByCategory", { year, month }),
   });
 
   const { data: recent = [] } = useQuery({
     queryKey: ["dashboard-recent", year, month],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("transactions")
-        .select("id, date, description, amount")
-        .gte("date", `${year}-${String(month).padStart(2, "0")}-01`)
-        .lt(
-          "date",
-          month === 12
-            ? `${year + 1}-01-01`
-            : `${year}-${String(month + 1).padStart(2, "0")}-01`,
-        )
-        .order("date", { ascending: false })
-        .limit(10);
-      return (data ?? []) as {
-        id: string;
-        date: string;
-        description: string;
-        amount: number;
-      }[];
-    },
+    queryFn: () => fetchData("recentTransactions", { year, month }),
   });
+
+  const { data: budgets = [] } = useQuery({
+    queryKey: ["budgets"],
+    queryFn: () => fetchData("budgets"),
+  });
+
+  const { data: budgetSpending = [] } = useQuery({
+    queryKey: ["budget-spending", year, month],
+    queryFn: () => fetchData("monthExpensesByCategory", { year, month }),
+  });
+
+  const atRiskBudgets: BudgetView[] = useMemo(() => {
+    const spent = new Map(
+      budgetSpending.map((r) => [r.category_root_id, r.total]),
+    );
+    return budgets
+      .map((b) => ({
+        id: b.id,
+        category_id: b.category_id,
+        category_name: b.category_name,
+        status: budgetStatus(b.amount, spent.get(b.category_id) ?? 0),
+      }))
+      .filter((b) => b.status.state !== "ok")
+      .sort((a, b) => b.status.rawRatio - a.status.rawRatio)
+      .slice(0, 4);
+  }, [budgets, budgetSpending]);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tableau de bord</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          Tableau de bord
+        </h1>
         <MonthNav
           year={year}
           month={month}
@@ -81,10 +104,17 @@ export default function DashboardPage() {
           }}
         />
       </div>
-      <KpiCards
+      <BalanceHero
+        balanceLabel={hero.label}
+        balanceValue={hero.value}
+        subline={hero.subline}
         totalIncome={totals.total_income}
         totalExpense={totals.total_expense}
         net={totals.net}
+      />
+      <BudgetWatch
+        atRisk={atRiskBudgets}
+        hasBudgets={budgets.length > 0}
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <CategoryChart data={categoryData} />

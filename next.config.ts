@@ -10,6 +10,10 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
+  // Offline fallback page, precached at install (see src/sw.ts).
+  additionalPrecacheEntries: [
+    { url: "/~offline", revision: process.env.VERCEL_GIT_COMMIT_SHA ?? "dev" },
+  ],
   disable: !isProd,
 });
 

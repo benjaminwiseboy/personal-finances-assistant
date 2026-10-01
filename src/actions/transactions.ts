@@ -1,32 +1,60 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { sql } from "@/lib/db";
+import { getUserId } from "@/lib/session";
 import {
   TransactionFormSchema,
   type TransactionFormInput,
 } from "@/domain/validators";
 import { toDecimal } from "@/lib/money";
 
-async function signedAmount(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  categoryId: string,
-  amount: string,
+function revalidate() {
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Checks the account and category belong to the user, and signs the amount
+ * from the category type (expense → negative).
+ */
+async function resolveTransaction(
+  input: TransactionFormInput,
   userId: string,
 ): Promise<{ amount?: string; error?: string }> {
-  const { data: category, error } = await supabase
-    .from("categories")
-    .select("type")
-    .eq("id", categoryId)
-    .eq("user_id", userId)
-    .single();
+  const [account] = await sql`
+    select id from accounts
+    where id = ${input.account_id} and user_id = ${userId}`;
+  if (!account) return { error: "Compte introuvable" };
 
-  if (error || !category) return { error: "Catégorie introuvable" };
+  const [category] = await sql`
+    select type from categories
+    where id = ${input.category_id} and user_id = ${userId}`;
+  if (!category) return { error: "Catégorie introuvable" };
 
-  const magnitude = toDecimal(amount).abs();
+  const magnitude = toDecimal(input.amount).abs();
   const signed =
     category.type === "expense" ? magnitude.negated() : magnitude;
   return { amount: signed.toString() };
+}
+
+/** Transfer legs are only editable through the transfer itself. */
+async function checkEditable(
+  id: string,
+  userId: string,
+  verb: "modifiez" | "supprimez",
+): Promise<{ error?: string }> {
+  const [existing] = await sql`
+    select transfer_id from transactions
+    where id = ${id} and user_id = ${userId}`;
+  if (!existing) return { error: "Transaction introuvable" };
+  if (existing.transfer_id) {
+    return {
+      error: `Cette transaction fait partie d'un transfert : ${verb} le transfert directement`,
+    };
+  }
+  return {};
 }
 
 export async function createTransaction(
@@ -37,44 +65,25 @@ export async function createTransaction(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("id", parsed.data.account_id)
-    .eq("user_id", user.id)
-    .single();
-  if (!account) return { error: "Compte introuvable" };
+  try {
+    const resolved = await resolveTransaction(parsed.data, userId);
+    if (resolved.error || !resolved.amount) {
+      return { error: resolved.error ?? "Échec du calcul du montant" };
+    }
 
-  const signed = await signedAmount(
-    supabase,
-    parsed.data.category_id,
-    parsed.data.amount,
-    user.id,
-  );
-  if (signed.error || !signed.amount) {
-    return { error: signed.error ?? "Échec du calcul du montant" };
+    await sql`
+      insert into transactions
+        (user_id, account_id, category_id, amount, date, description)
+      values (${userId}, ${parsed.data.account_id}, ${parsed.data.category_id},
+              ${resolved.amount}, ${parsed.data.date}, ${parsed.data.description})`;
+  } catch {
+    return { error: "Échec de la création de la transaction" };
   }
 
-  const { error } = await supabase.from("transactions").insert({
-    user_id: user.id,
-    account_id: parsed.data.account_id,
-    category_id: parsed.data.category_id,
-    amount: signed.amount,
-    date: parsed.data.date,
-    description: parsed.data.description,
-  });
-
-  if (error) return { error: "Échec de la création de la transaction" };
-
-  revalidatePath("/transactions");
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }
 
@@ -87,98 +96,51 @@ export async function updateTransaction(
     return { error: parsed.error.issues[0]?.message ?? "Formulaire invalide" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { data: existing, error: fetchError } = await supabase
-    .from("transactions")
-    .select("transfer_id")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  try {
+    const editable = await checkEditable(id, userId, "modifiez");
+    if (editable.error) return editable;
 
-  if (fetchError || !existing) return { error: "Transaction introuvable" };
-  if (existing.transfer_id) {
-    return {
-      error:
-        "Cette transaction fait partie d'un transfert : modifiez le transfert directement",
-    };
+    const resolved = await resolveTransaction(parsed.data, userId);
+    if (resolved.error || !resolved.amount) {
+      return { error: resolved.error ?? "Échec du calcul du montant" };
+    }
+
+    await sql`
+      update transactions
+      set account_id = ${parsed.data.account_id},
+          category_id = ${parsed.data.category_id},
+          amount = ${resolved.amount},
+          date = ${parsed.data.date},
+          description = ${parsed.data.description}
+      where id = ${id} and user_id = ${userId} and transfer_id is null`;
+  } catch {
+    return { error: "Échec de la mise à jour de la transaction" };
   }
 
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("id", parsed.data.account_id)
-    .eq("user_id", user.id)
-    .single();
-  if (!account) return { error: "Compte introuvable" };
-
-  const signed = await signedAmount(
-    supabase,
-    parsed.data.category_id,
-    parsed.data.amount,
-    user.id,
-  );
-  if (signed.error || !signed.amount) {
-    return { error: signed.error ?? "Échec du calcul du montant" };
-  }
-
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      account_id: parsed.data.account_id,
-      category_id: parsed.data.category_id,
-      amount: signed.amount,
-      date: parsed.data.date,
-      description: parsed.data.description,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) return { error: "Échec de la mise à jour de la transaction" };
-
-  revalidatePath("/transactions");
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }
 
 export async function deleteTransaction(
   id: string,
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Non authentifié" };
+  const userId = await getUserId();
+  if (!userId) return { error: "Non authentifié" };
 
-  const { data: existing, error: fetchError } = await supabase
-    .from("transactions")
-    .select("transfer_id")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  try {
+    const editable = await checkEditable(id, userId, "supprimez");
+    if (editable.error) return editable;
 
-  if (fetchError || !existing) return { error: "Transaction introuvable" };
-  if (existing.transfer_id) {
-    return {
-      error:
-        "Cette transaction fait partie d'un transfert : supprimez le transfert directement",
-    };
+    await sql`
+      delete from transactions
+      where id = ${id} and user_id = ${userId} and transfer_id is null`;
+  } catch {
+    return { error: "Échec de la suppression de la transaction" };
   }
 
-  const { error } = await supabase
-    .from("transactions")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) return { error: "Échec de la suppression de la transaction" };
-
-  revalidatePath("/transactions");
-  revalidatePath("/accounts");
-  revalidatePath("/dashboard");
+  revalidate();
   return {};
 }

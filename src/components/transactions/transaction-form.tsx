@@ -13,6 +13,7 @@ import {
   updateTransaction,
 } from "@/actions/transactions";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -136,7 +137,11 @@ export function TransactionForm({
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="date">Date</Label>
-        <Input id="date" type="date" {...register("date")} />
+        <DatePicker
+          id="date"
+          value={watch("date")}
+          onChange={(v) => setValue("date", v)}
+        />
         {errors.date && (
           <p className="text-sm text-destructive">{errors.date.message}</p>
         )}

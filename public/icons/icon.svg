@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0f172a"/>
-  <text x="256" y="296" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="220" font-weight="700" text-anchor="middle" fill="#fafafa">€</text>
-  <text x="256" y="396" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="40" font-weight="500" text-anchor="middle" fill="#94a3b8">FINANCES</text>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4a340"/>
+      <stop offset="1" stop-color="#ec6a2a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0d0b10"/>
+  <rect x="96" y="96" width="320" height="320" rx="80" fill="url(#g)"/>
+  <text x="256" y="336" font-family="Arial, Helvetica, sans-serif" font-size="230" font-weight="700" text-anchor="middle" fill="#1c120c">€</text>
 </svg>

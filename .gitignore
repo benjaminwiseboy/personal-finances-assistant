@@ -36,3 +36,4 @@ next-env.d.ts
 
 # local worktrees (never track a nested worktree's contents)
 .claude/worktrees/
+*.crt
